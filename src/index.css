@@ -1,0 +1,51 @@
+/* ─── Reset & variables ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0a0e1a;
+  --bg2:      #111827;
+  --bg3:      #1a2236;
+  --border:   #2a3550;
+  --border2:  #3a4a70;
+  --text:     #e8eaf0;
+  --muted:    #8892a4;
+  --red:      #e03c3c;
+  --red-dark: #b02020;
+  --green:    #22c55e;
+  --gold:     #f5a623;
+  --purple:   #7c3aed;
+  --purple-l: #a78bfa;
+  --white:    #ffffff;
+  --font-head: 'Sora', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --radius:   10px;
+  --radius-lg:16px;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #2a3550; border-radius: 3px; }
+
+/* ─── Utilitaires ───────────────────────────────────────────────────────────── */
+.fade-in { animation: fadeIn .35s ease both; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+button { cursor: pointer; font-family: var(--font-body); }
+a { color: inherit; text-decoration: none; }
