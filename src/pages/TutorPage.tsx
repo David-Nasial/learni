@@ -271,7 +271,7 @@ export function TutorPage() {
             </button>
           </div>
           <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, textAlign: 'center' }}>
-            Tuteur alimenté par Claude · LearnI
+            Tuteur IA · LearnI
           </p>
         </div>
       </div>

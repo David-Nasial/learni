@@ -263,8 +263,8 @@ export function PricingPage({ appMode, onLogin }: Props) {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {(isSchool
-                  ? ['Fonctionnalité', 'Gratuit', 'Pro 24$', 'Enseignant 29$/classe']
-                  : ['Fonctionnalité', 'Gratuit', 'Starter 10$', 'Pro 24$', 'Autodidacte 35$']
+                  ? ['Fonctionnalité', 'Gratuit', 'Pro 22.99$', 'Enseignant 35.99$']
+                  : ['Fonctionnalité', 'Gratuit', 'Starter 9.99$', 'Pro 22.99$', 'Autodidacte 35.99$']
                 ).map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Fonctionnalité' ? 'left' : 'center', color: 'var(--muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.5px' }}>{h}</th>
                 ))}
@@ -272,7 +272,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
             </thead>
             <tbody>
               {(isSchool ? [
-                ['Quiz par jour',        '3',       'Illimité', 'Illimité'],
+                ['Quiz par jour',        '2',       'Illimité', 'Illimité'],
                 ['Import PDF',           '✅',      '✅',       '✅'],
                 ['Explications IA',      '❌',      'Complètes','Complètes'],
                 ['Caméra',               '❌',      '✅',       '✅'],
@@ -281,7 +281,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
                 ['Suivi élèves',         '❌',      '❌',       '✅'],
                 ['Export PDF',           '❌',      '✅',       '✅'],
               ] : [
-                ['Quiz par jour',        '3',       '5',        'Illimité', 'Illimité'],
+                ['Quiz par jour',        '2',       '5',        'Illimité', 'Illimité'],
                 ['PDF/mois',             '—',       '5',        'Illimité', 'Illimité'],
                 ['Explications IA',      '❌',      'Basiques', 'Complètes','Complètes'],
                 ['Caméra',               '❌',      '❌',       '✅',       '✅'],

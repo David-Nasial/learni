@@ -8,7 +8,7 @@ interface Props {
 
 const steps = [
   { n: '01', icon: '📄', title: 'Importez votre cours', desc: 'PDF, manuel, notes — n\'importe quel document.' },
-  { n: '02', icon: '⚡', title: 'L\'IA génère le quiz', desc: 'Claude analyse le contenu et crée des QCM en quelques secondes.' },
+  { n: '02', icon: '⚡', title: 'L\'IA génère le quiz', desc: 'L\'IA analyse le contenu et crée des QCM en quelques secondes.' },
   { n: '03', icon: '🎯', title: 'Révisez & progressez', desc: 'Répondez, consultez les explications, suivez vos progrès.' },
 ]
 
@@ -37,15 +37,6 @@ export function HomePage({ onNavigate, onUpgrade, appMode }: Props) {
         textAlign: 'center', padding: 'clamp(3rem,8vw,5rem) 1.5rem 2.5rem',
         background: 'radial-gradient(ellipse 80% 40% at 50% 0%, rgba(224,60,60,.12) 0%, transparent 70%)',
       }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '5px 14px', borderRadius: 20, marginBottom: '1.25rem',
-          background: '#1a1a2e', border: '1px solid #3d2b6b', fontSize: 12,
-          color: '#a78bfa', fontWeight: 600,
-        }}>
-          ✨ Alimenté par Claude · Anthropic
-        </div>
-
         <h1 style={{
           fontFamily: 'var(--font-head)',
           fontSize: 'clamp(2.2rem, 5.5vw, 3.4rem)',
