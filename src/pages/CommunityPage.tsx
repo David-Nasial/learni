@@ -39,7 +39,7 @@ export function CommunityPage({ appMode }: Props) {
   const [joining,      setJoining]      = useState<string | null>(null)
   const [classrooms,   setClassrooms]   = useState<Classroom[]>([])
   const [challenges,   setChallenges]   = useState<Challenge[]>([])
-  const [challengeInput, setChallengeInput] = useState('')
+  const [challengeInputs, setChallengeInputs] = useState<Record<string, string>>({})
   const [generatingChallenge, setGeneratingChallenge] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -122,9 +122,9 @@ export function CommunityPage({ appMode }: Props) {
   }
 
   const handleSubmitChallenge = async (challengeId: string) => {
-    if (!user || !challengeInput.trim()) return
-    await submitChallenge(challengeId, user.id, challengeInput.trim())
-    setChallengeInput('')
+    if (!user || !challengeInputs[challengeId]?.trim()) return
+    await submitChallenge(challengeId, user.id, challengeInputs[challengeId].trim())
+    setChallengeInputs(prev => ({ ...prev, [challengeId]: '' }))
   }
 
   const refreshMessages = async (channelId: string) => {
@@ -377,8 +377,8 @@ export function CommunityPage({ appMode }: Props) {
                     <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, marginBottom: '.75rem' }}>{ch.description}</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 12, color: 'var(--muted)' }}>⏰ {daysLeft} jours restants</span>
-                      <input value={challengeInput} onChange={e => setChallengeInput(e.target.value)} placeholder="Partage ta solution..." style={{ flex: 1, padding: '7px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-body)' }} />
-                      <button onClick={() => handleSubmitChallenge(ch.id)} style={{ padding: '7px 14px', background: 'var(--purple)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, cursor: 'pointer' }}>Partager</button>
+                      <input value={challengeInputs[ch.id] ?? ''} onChange={e => setChallengeInputs(prev => ({ ...prev, [ch.id]: e.target.value }))} placeholder="Partage ta solution..." style={{ flex: 1, padding: '7px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-body)' }} />
+                      <button onClick={() => handleSubmitChallenge(ch.id)} disabled={!challengeInputs[ch.id]?.trim()} style={{ padding: '7px 14px', background: challengeInputs[ch.id]?.trim() ? 'var(--purple)' : 'var(--bg3)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, cursor: challengeInputs[ch.id]?.trim() ? 'pointer' : 'not-allowed' }}>Partager</button>
                     </div>
                   </div>
                 )
