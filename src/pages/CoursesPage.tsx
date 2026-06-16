@@ -400,7 +400,7 @@ export function CoursesPage() {
         <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--white)' }}>
           🎓 Mes Cours
         </h2>
-        <button onClick={() => { setSubject(''); setStep('new') }} style={{
+        <button onClick={() => { setSubject(''); setQuestions([]); setAnswers([]); setLevel(null); setStep('new') }} style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '9px 18px', background: 'var(--purple)',
           border: 'none', borderRadius: 8, color: '#fff',
@@ -420,7 +420,7 @@ export function CoursesPage() {
           <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: '1.5rem', lineHeight: 1.6 }}>
             Dis à l'IA ce que tu veux apprendre — elle évalue ton niveau et génère un cours complet avec modules et exercices.
           </p>
-          <button onClick={() => { setSubject(''); setStep('new') }} style={{
+          <button onClick={() => { setSubject(''); setQuestions([]); setAnswers([]); setLevel(null); setStep('new') }} style={{
             padding: '12px 28px', background: 'var(--purple)', border: 'none',
             borderRadius: 10, color: '#fff', fontFamily: 'var(--font-head)',
             fontSize: 14, fontWeight: 600, cursor: 'pointer',
