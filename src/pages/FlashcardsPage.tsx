@@ -1,19 +1,11 @@
 import { useState, useCallback } from 'react'
 import { Loader, ChevronLeft, ChevronRight, RotateCcw, Upload } from 'lucide-react'
 import { generateFlashcards } from '../utils/supabase'
+import { extractText } from '../utils/pdfExtract'
 import type { Flashcard } from '../types'
 
 type Step = 'setup' | 'loading' | 'review'
 type Lang = 'fr' | 'en'
-
-function extractTextFromFile(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve((e.target?.result as string) ?? '')
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier'))
-    reader.readAsText(file)
-  })
-}
 
 // ─── Carte individuelle ───────────────────────────────────────────────────────
 function Card({ card, index, total }: { card: Flashcard; index: number; total: number }) {
@@ -128,7 +120,7 @@ export function FlashcardsPage() {
 
     if (inputMode === 'file') {
       if (!file) { setError('Veuillez sélectionner un fichier.'); return }
-      try { text = await extractTextFromFile(file) } catch { setError('Impossible de lire ce fichier.'); return }
+      try { text = await extractText(file) } catch (err) { setError(err instanceof Error ? err.message : 'Impossible de lire ce fichier.'); return }
       title = file.name.replace(/\.[^.]+$/, '')
     } else {
       text = pastedText.trim()
@@ -278,7 +270,7 @@ export function FlashcardsPage() {
           <input
             id="fc-file-input"
             type="file"
-            accept=".txt,.md,.csv,.json"
+            accept=".pdf,.txt,.md"
             style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }}
           />
@@ -288,7 +280,7 @@ export function FlashcardsPage() {
           ) : (
             <>
               <p style={{ color: 'var(--text)', marginBottom: '.3rem' }}>Glissez un fichier ici</p>
-              <p style={{ color: '#555', fontSize: 12 }}>.txt, .md, .csv, .json</p>
+              <p style={{ color: '#555', fontSize: 12 }}>PDF, TXT, MD — max 50 Mo</p>
             </>
           )}
         </div>
