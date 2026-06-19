@@ -39,8 +39,9 @@ export function CoursesPage() {
   const [questions,    setQuestions]     = useState<AssessQuestion[]>([])
   const [answers,      setAnswers]       = useState<number[]>([])
   const [level,        setLevel]         = useState<Level | null>(null)
-  const [loading,      setLoading]       = useState(true)
-  const [error,        setError]         = useState('')
+  const [loading,         setLoading]        = useState(true)
+  const [loadingQuestions,setLoadingQuestions]= useState(false)
+  const [error,           setError]          = useState('')
 
   useEffect(() => {
     if (!user || !hasAccess) { setLoading(false); return }
@@ -58,14 +59,16 @@ export function CoursesPage() {
   const handleStartNew = async () => {
     if (!subject.trim()) return
     setError('')
-    setStep('assess')
+    setLoadingQuestions(true)
     try {
       const data = await getAssessmentQuestions(subject.trim())
       setQuestions((data.questions as AssessQuestion[]) ?? [])
       setAnswers([])
+      setStep('assess')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur')
-      setStep('new')
+    } finally {
+      setLoadingQuestions(false)
     }
   }
 
@@ -380,13 +383,16 @@ export function CoursesPage() {
               {error}
             </div>
           )}
-          <button onClick={handleStartNew} disabled={!subject.trim()} style={{
-            width: '100%', padding: '12px', background: subject.trim() ? 'var(--purple)' : 'var(--bg3)',
+          <button onClick={handleStartNew} disabled={!subject.trim() || loadingQuestions} style={{
+            width: '100%', padding: '12px', background: subject.trim() && !loadingQuestions ? 'var(--purple)' : 'var(--bg3)',
             border: 'none', borderRadius: 10, color: '#fff',
             fontFamily: 'var(--font-head)', fontSize: 14, fontWeight: 600,
-            cursor: subject.trim() ? 'pointer' : 'not-allowed',
+            cursor: subject.trim() && !loadingQuestions ? 'pointer' : 'not-allowed',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           }}>
-            Évaluer mon niveau →
+            {loadingQuestions
+              ? <><Loader size={16} className="spin" /> Préparation des questions…</>
+              : 'Évaluer mon niveau →'}
           </button>
         </div>
       </div>
