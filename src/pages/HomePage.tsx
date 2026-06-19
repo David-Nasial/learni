@@ -77,6 +77,10 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
       color: '#f59e0b', always: false, show: isAutodidacte || isSchool || isSuperadmin,
     },
     {
+      icon: '🃏', label: 'Flashcards', desc: 'Cartes recto/verso générées par l\'IA', page: 'flashcards' as Page,
+      color: '#a78bfa', always: false, show: isPro || isAutodidacte || isSuperadmin,
+    },
+    {
       icon: '🏫', label: 'Ma classe', desc: 'Tableau de bord enseignant', page: 'teacher' as Page,
       color: '#60a5fa', always: false, show: isTeacher || isSuperadmin,
     },

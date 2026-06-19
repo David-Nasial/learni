@@ -17,6 +17,7 @@ import { TutorPage }         from './pages/TutorPage'
 import { StudyPlanPage }     from './pages/StudyPlanPage'
 import { CoursesPage }       from './pages/CoursesPage'
 import { CommunityPage }     from './pages/CommunityPage'
+import { FlashcardsPage }    from './pages/FlashcardsPage'
 import { StudentDashboard } from './pages/StudentDashboard'
 import { useLocalStorage }  from './hooks/useLocalStorage'
 import { signOut, saveResultToCloud } from './utils/supabase'
@@ -201,7 +202,7 @@ function AppInner() {
   const renderPage = () => {
     switch (page) {
       case 'home':
-        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} />
+        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} />
 
       case 'upload':
         return (
@@ -263,6 +264,9 @@ function AppInner() {
 
       case 'community':
         return <CommunityPage appMode={appMode} />
+
+      case 'flashcards':
+        return <FlashcardsPage />
 
       default:
         return null

@@ -59,6 +59,7 @@ export type Page =
   | 'community'
   | 'study'
   | 'courses'
+  | 'flashcards'
 
 // ─── Community types ──────────────────────────────────────────────────────────
 
@@ -99,4 +100,10 @@ export interface CommunityMessage {
 export interface TutorMessage {
   role: 'user' | 'assistant'
   content: string
+}
+
+export interface Flashcard {
+  front: string
+  back: string
+  topic: string
 }

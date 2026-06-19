@@ -738,3 +738,32 @@ export async function getClassroomResources(userId: string): Promise<{ name: str
     url:  m.file_url ?? '',
   }))
 }
+
+// ─── Flashcards ───────────────────────────────────────────────────────────────
+export async function generateFlashcards(
+  pdfText: string,
+  numCards: number,
+  language: 'fr' | 'en',
+  documentTitle: string
+): Promise<{ front: string; back: string; topic: string }[]> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-flashcards`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ pdfText, numCards, language, documentTitle }),
+    }
+  )
+  if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`)
+  const data = await response.json()
+  if (data.error) throw new Error(data.error)
+  if (!Array.isArray(data.cards)) throw new Error('Format de réponse invalide.')
+  return data.cards
+}

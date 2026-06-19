@@ -26,15 +26,15 @@ export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn, on
     { icon: <Bot size={17} />,       label: 'Tuteur IA',       page: 'tutor'   as Page },
     { icon: <Calendar size={17} />,   label: 'Plan d\'étude',   page: 'study'   as Page },
     { icon: <BookOpen size={17} />,   label: 'Mes Cours',        page: 'courses' as Page },
-    { icon: <Users size={17} />,     label: 'Communautés',     page: 'community' as Page },
-    { icon: <DollarSign size={17} />,label: 'Tarifs',          page: 'pricing' as Page },
+    { icon: <Users size={17} />,     label: 'Communautés',     page: 'community'  as Page },
+    { icon: <Layers size={17} />,    label: 'Flashcards',      page: 'flashcards' as Page },
+    { icon: <DollarSign size={17} />,label: 'Tarifs',          page: 'pricing'    as Page },
   ]
 
   // Items Pro (avec paywall)
   const proItems = [
-    { icon: <Camera size={17} />,  label: 'Caméra',         feature: 'camera'    },
-    { icon: <Layers size={17} />,  label: 'Flashcards',     feature: 'flashcard' },
-    { icon: <Bot size={17} />,     label: 'Explication IA', feature: 'explain'   },
+    { icon: <Camera size={17} />,  label: 'Caméra',         feature: 'camera'  },
+    { icon: <Bot size={17} />,     label: 'Explication IA', feature: 'explain' },
   ]
 
   // Items école — seulement si mode school et connecté
