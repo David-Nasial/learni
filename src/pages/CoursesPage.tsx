@@ -307,6 +307,7 @@ export function CoursesPage() {
   if (step === 'course' && activeCourse) {
     const progress = getCourseProgress(modules)
     return (
+      <>
       <div className="fade-in" style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
         {/* Sidebar modules */}
         <aside style={{
@@ -430,6 +431,7 @@ export function CoursesPage() {
           exercise={activeLesson.exercise}
         />
       )}
+      </>
     )
   }
 
