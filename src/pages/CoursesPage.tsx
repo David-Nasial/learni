@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { BookOpen, ChevronRight, ChevronDown, CheckCircle, Circle, Loader, ArrowLeft, Zap } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { BookOpen, ChevronRight, ChevronDown, CheckCircle, Circle, Loader, ArrowLeft, Zap, MessageCircle, X, Send } from 'lucide-react'
 import {
-  getAssessmentQuestions, generateAndSaveCourse, getUserCourses, getCourseDetails, toggleLesson,
+  getAssessmentQuestions, generateAndSaveCourse, getUserCourses, getCourseDetails, toggleLesson, callTutor,
   type UserCourse, type CourseModule, type CourseLesson,
 } from '../utils/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -24,6 +24,177 @@ interface AssessQuestion {
   level: Level
 }
 
+// ─── Tuteur IA flottant ───────────────────────────────────────────────────────
+interface TutorMsg { role: 'user' | 'assistant'; content: string }
+
+function CourseTutor({ lessonTitle, lessonContent, exercise }: {
+  lessonTitle: string
+  lessonContent: string
+  exercise?: string
+}) {
+  const [open,     setOpen]    = useState(false)
+  const [msgs,     setMsgs]    = useState<TutorMsg[]>([])
+  const [input,    setInput]   = useState('')
+  const [loading,  setLoading] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [msgs, open])
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || loading) return
+    setInput('')
+    const userMsg: TutorMsg = { role: 'user', content: text }
+    const history = [...msgs, userMsg]
+    setMsgs(history)
+    setLoading(true)
+    try {
+      // On injecte le contexte de la leçon dans le premier message système via `topic`
+      const context = `Leçon : "${lessonTitle}"\n\nContenu : ${lessonContent.slice(0, 2000)}${exercise ? `\n\nExercice : ${exercise}` : ''}`
+      const reply = await callTutor(history, 'beginner', context)
+      setMsgs([...history, { role: 'assistant', content: reply }])
+    } catch {
+      setMsgs([...history, { role: 'assistant', content: "Désolé, une erreur s'est produite. Réessaie." }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      {/* Bouton flottant */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Tuteur IA"
+        style={{
+          position: 'fixed', bottom: 28, right: 28, zIndex: 200,
+          width: 56, height: 56, borderRadius: '50%',
+          background: open ? '#333' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+          border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 20px rgba(139,92,246,.5)',
+          transition: 'background .2s, transform .2s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.08)')}
+        onMouseLeave={e => (e.currentTarget.style.transform = 'none')}
+      >
+        {open ? <X size={22} color="#fff" /> : <MessageCircle size={22} color="#fff" />}
+      </button>
+
+      {/* Fenêtre de chat */}
+      {open && (
+        <div style={{
+          position: 'fixed', bottom: 96, right: 28, zIndex: 199,
+          width: 'min(380px, calc(100vw - 40px))',
+          height: 460,
+          background: 'var(--bg2)', border: '1px solid #3d2b6b',
+          borderRadius: 18, display: 'flex', flexDirection: 'column',
+          boxShadow: '0 8px 40px rgba(0,0,0,.5)',
+          overflow: 'hidden',
+        }}>
+          {/* En-tête */}
+          <div style={{
+            padding: '14px 16px', background: 'linear-gradient(135deg, #12101e, #1a1033)',
+            borderBottom: '1px solid #3d2b6b',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem',
+            }}>🤖</div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, color: 'var(--white)', fontSize: 14 }}>
+                Tuteur IA
+              </div>
+              <div style={{ fontSize: 11, color: '#a78bfa' }}>
+                Je connais cette leçon — pose-moi tes questions !
+              </div>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {msgs.length === 0 && (
+              <div style={{
+                margin: 'auto', textAlign: 'center', padding: '1.5rem 1rem',
+              }}>
+                <div style={{ fontSize: '2rem', marginBottom: '.5rem' }}>👋</div>
+                <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
+                  Je lis la leçon avec toi.<br />
+                  Pose-moi n'importe quelle question sur <strong style={{ color: 'var(--white)' }}>"{lessonTitle}"</strong>.
+                </p>
+              </div>
+            )}
+            {msgs.map((m, i) => (
+              <div key={i} style={{
+                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '85%',
+                background: m.role === 'user' ? 'var(--purple)' : 'var(--bg3)',
+                border: m.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                padding: '10px 13px',
+                fontSize: 13, lineHeight: 1.6,
+                color: 'var(--text)',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {m.content}
+              </div>
+            ))}
+            {loading && (
+              <div style={{
+                alignSelf: 'flex-start', background: 'var(--bg3)',
+                border: '1px solid var(--border)', borderRadius: '14px 14px 14px 4px',
+                padding: '10px 14px', display: 'flex', gap: 5, alignItems: 'center',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', animation: 'pulse 1s infinite' }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', animation: 'pulse 1s .2s infinite' }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', animation: 'pulse 1s .4s infinite' }} />
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div style={{
+            padding: '10px 12px', borderTop: '1px solid var(--border)',
+            display: 'flex', gap: 8, alignItems: 'flex-end',
+          }}>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+              placeholder="Pose ta question…"
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', background: 'var(--bg3)',
+                border: '1px solid var(--border)', borderRadius: 10,
+                padding: '8px 12px', color: 'var(--text)', fontSize: 13,
+                fontFamily: 'inherit', lineHeight: 1.5, maxHeight: 80, overflowY: 'auto',
+              }}
+            />
+            <button
+              onClick={send} disabled={!input.trim() || loading}
+              style={{
+                width: 36, height: 36, borderRadius: '50%', border: 'none',
+                background: input.trim() && !loading ? 'var(--purple)' : '#333',
+                cursor: input.trim() && !loading ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Send size={15} color="#fff" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
 export function CoursesPage() {
   const { user, profile } = useAuth()
   const isSuperadmin = profile?.role === 'superadmin'
@@ -250,6 +421,15 @@ export function CoursesPage() {
           )}
         </div>
       </div>
+
+      {/* Tuteur IA flottant — visible seulement quand une leçon est ouverte */}
+      {activeLesson && (
+        <CourseTutor
+          lessonTitle={activeLesson.title}
+          lessonContent={activeLesson.content}
+          exercise={activeLesson.exercise}
+        />
+      )}
     )
   }
 
