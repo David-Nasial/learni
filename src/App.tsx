@@ -18,8 +18,9 @@ import { StudyPlanPage }     from './pages/StudyPlanPage'
 import { CoursesPage }       from './pages/CoursesPage'
 import { CommunityPage }     from './pages/CommunityPage'
 import { FlashcardsPage }    from './pages/FlashcardsPage'
-import { StudentDashboard } from './pages/StudentDashboard'
-import { useLocalStorage }  from './hooks/useLocalStorage'
+import { StudentDashboard }   from './pages/StudentDashboard'
+import { OnboardingModal }    from './components/OnboardingModal'
+import { useLocalStorage }    from './hooks/useLocalStorage'
 import { signOut, saveResultToCloud } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
@@ -113,20 +114,46 @@ function AppInner() {
   const [finalAnswers, setFinalAnswers] = useState<(number | null)[]>([])
   const [genError, setGenError]         = useState('')
 
+  // Onboarding
+  const [onboardingType, setOnboarding] = useState<'first' | Plan | null>(null)
+  const [seenOnboarding, setSeenOnboarding] = useLocalStorage<string[]>('learni_onboarding_seen', [])
+
   // Sync plan depuis profil Supabase
   useEffect(() => {
     if (profile?.plan) setPlan(profile.plan as Plan)
   }, [profile])
+
+  // Déclencher onboarding première connexion
+  useEffect(() => {
+    if (user && !loading && !seenOnboarding.includes('first')) {
+      setOnboarding('first')
+    }
+  }, [user, loading])
+
+  // Déclencher onboarding après achat d'un plan
+  useEffect(() => {
+    if (plan && plan !== 'free' && !seenOnboarding.includes(plan)) {
+      // Petit délai pour laisser le dashboard s'afficher d'abord
+      const t = setTimeout(() => setOnboarding(plan), 800)
+      return () => clearTimeout(t)
+    }
+  }, [plan])
 
   // Retour depuis Stripe Checkout
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('payment') === 'success') {
       window.history.replaceState({}, '', window.location.pathname)
-      // Le webhook Stripe met à jour le plan — on attend 2s puis on recharge le profil
       setTimeout(() => window.location.reload(), 2000)
     }
   }, [])
+
+  const closeOnboarding = () => {
+    if (onboardingType) {
+      setSeenOnboarding(prev => prev.includes(onboardingType) ? prev : [...prev, onboardingType])
+    }
+    setOnboarding(null)
+  }
 
   const today = new Date().toLocaleDateString('fr-CA')
 
@@ -303,6 +330,13 @@ function AppInner() {
         isLoggedIn={!!user}
         onLogin={() => { setPaywall(null); navigate('login') }}
       />
+      {onboardingType && (
+        <OnboardingModal
+          type={onboardingType}
+          onClose={closeOnboarding}
+          onNavigate={(p) => { closeOnboarding(); navigate(p) }}
+        />
+      )}
     </div>
   )
 }
