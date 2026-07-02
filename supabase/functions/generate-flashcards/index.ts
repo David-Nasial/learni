@@ -1,6 +1,4 @@
 // ─── Edge Function : generate-flashcards ─────────────────────────────────────
-// Génère des flashcards recto/verso depuis un texte source.
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
@@ -10,13 +8,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const MATH_KEYWORDS = ['math', 'mathématique', 'algèbre', 'calcul', 'géométrie', 'trigonométrie', 'statistique', 'probabilité', 'physique', 'chimie', 'formule']
+
+function isMathSubject(title: string, text: string): boolean {
+  const combined = (title + ' ' + text.slice(0, 500)).toLowerCase()
+  return MATH_KEYWORDS.some(k => combined.includes(k))
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { pdfText, numCards, language, documentTitle } = await req.json()
+    const { pdfText, numCards, language, documentTitle, existingCards } = await req.json()
 
     if (!pdfText) {
       return new Response(JSON.stringify({ error: 'pdfText manquant' }), {
@@ -27,27 +32,50 @@ serve(async (req) => {
     const num   = Math.min(numCards ?? 15, 30)
     const lang  = language === 'en' ? 'English' : 'français'
     const title = documentTitle ?? 'document'
+    const isMath = isMathSubject(title, pdfText)
+
+    // Cartes déjà générées à éviter (pour la régénération)
+    const alreadyGenerated = Array.isArray(existingCards) && existingCards.length > 0
+      ? `\n\nIMPORTANT : Ces cartes existent DÉJÀ — ne les répète PAS, génère de nouvelles cartes différentes :\n${existingCards.map((c: { front: string }) => `- "${c.front}"`).join('\n')}`
+      : ''
+
+    const focusInstruction = isMath
+      ? `Focus prioritaire pour ce document (mathématiques/sciences) :
+- Formules essentielles (avec leur signification)
+- Théorèmes et leurs conditions d'application
+- Définitions clés
+- Erreurs fréquentes ou points à ne pas confondre
+- Étapes de raisonnement importantes`
+      : `Focus prioritaire :
+- Concepts et définitions clés
+- Dates, faits et événements importants
+- Points souvent négligés ou mal compris
+- Relations de cause à effet
+- Termes techniques à maîtriser`
 
     const userPrompt = `
-Tu es LearnI. Génère exactement ${num} flashcards en ${lang} à partir du texte source du document "${title}".
+Tu es LearnI. Génère exactement ${num} flashcards en ${lang} à partir du document "${title}".
 
 Texte source :
 ---
 ${pdfText.slice(0, 12000)}
 ---
 
+${focusInstruction}
+${alreadyGenerated}
+
 Retourne un JSON avec cette structure EXACTE (tableau de ${num} objets) :
 [
   {
-    "front": "Terme, concept ou question courte (côté recto)",
-    "back": "Définition, explication ou réponse concise (côté verso, 1-3 phrases max)",
-    "topic": "Thème court (ex: Biologie, Dates, Définitions)"
+    "front": "Terme, formule ou question courte (côté recto)",
+    "back": "Définition, explication ou réponse concise (1-3 phrases max)",
+    "topic": "Thème court (ex: Formules, Définitions, Points clés)"
   }
 ]
 
 Règles :
-- Le recto doit être court et clair (un terme, une question, ou un concept clé)
-- Le verso doit être complet mais concis — pas de phrases trop longues
+- Le recto doit être court et précis
+- Le verso doit être complet mais concis
 - Couvre des thèmes variés du texte
 - Réponds UNIQUEMENT en JSON valide, sans markdown
 `.trim()

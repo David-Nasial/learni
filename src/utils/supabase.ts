@@ -744,7 +744,8 @@ export async function generateFlashcards(
   pdfText: string,
   numCards: number,
   language: 'fr' | 'en',
-  documentTitle: string
+  documentTitle: string,
+  existingCards?: { front: string; back: string; topic: string }[]
 ): Promise<{ front: string; back: string; topic: string }[]> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -758,7 +759,7 @@ export async function generateFlashcards(
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ pdfText, numCards, language, documentTitle }),
+      body: JSON.stringify({ pdfText, numCards, language, documentTitle, existingCards }),
     }
   )
   if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`)
@@ -766,4 +767,61 @@ export async function generateFlashcards(
   if (data.error) throw new Error(data.error)
   if (!Array.isArray(data.cards)) throw new Error('Format de réponse invalide.')
   return data.cards
+}
+
+// ─── Flashcard Sets (sauvegarde) ─────────────────────────────────────────────
+
+export interface FlashcardSet {
+  id: string
+  title: string
+  subject: string
+  source_text: string
+  cards: { front: string; back: string; topic: string }[]
+  created_at: string
+  updated_at: string
+}
+
+export async function saveFlashcardSet(
+  userId: string,
+  title: string,
+  subject: string,
+  sourceText: string,
+  cards: { front: string; back: string; topic: string }[]
+): Promise<FlashcardSet> {
+  const { data, error } = await supabase
+    .from('flashcard_sets')
+    .insert({ user_id: userId, title, subject, source_text: sourceText, cards })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data as FlashcardSet
+}
+
+export async function getFlashcardSets(userId: string): Promise<FlashcardSet[]> {
+  const { data, error } = await supabase
+    .from('flashcard_sets')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as FlashcardSet[]
+}
+
+export async function updateFlashcardSet(
+  setId: string,
+  cards: { front: string; back: string; topic: string }[]
+): Promise<void> {
+  const { error } = await supabase
+    .from('flashcard_sets')
+    .update({ cards, updated_at: new Date().toISOString() })
+    .eq('id', setId)
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteFlashcardSet(setId: string): Promise<void> {
+  const { error } = await supabase
+    .from('flashcard_sets')
+    .delete()
+    .eq('id', setId)
+  if (error) throw new Error(error.message)
 }
