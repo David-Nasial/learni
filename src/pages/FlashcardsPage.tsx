@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Loader, ChevronLeft, ChevronRight, RotateCcw, Upload, Trash2, RefreshCw, Plus, BookOpen } from 'lucide-react'
+import { Loader, ChevronLeft, ChevronRight, Upload, Trash2, RefreshCw, Plus, BookOpen } from 'lucide-react'
 import {
   generateFlashcards,
   saveFlashcardSet, getFlashcardSets, updateFlashcardSet, deleteFlashcardSet,
