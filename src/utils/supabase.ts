@@ -408,51 +408,6 @@ export interface StudyPlanItem {
   done: boolean
 }
 
-export async function generateAndSaveStudyPlan(
-  userId: string,
-  goal: string,
-  examDate: string | null,
-  results: unknown[],
-  resources: { name: string; url: string }[] = []
-): Promise<{ plan: StudyPlan; items: StudyPlanItem[] }> {
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
-
-  // Appel à l'edge function pour générer les items
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-study-plan`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ goal, examDate, results, resources, startDate: new Date().toISOString().split('T')[0] }),
-    }
-  )
-  const data = await response.json() as { items?: StudyPlanItem[]; error?: string }
-  if (data.error) throw new Error(data.error)
-  if (!data.items) throw new Error('Aucun item généré.')
-
-  // Sauvegarder le plan
-  const { data: plan, error: planError } = await supabase
-    .from('study_plans')
-    .insert({ user_id: userId, goal, exam_date: examDate })
-    .select().single()
-  if (planError) throw new Error(planError.message)
-
-  // Sauvegarder les items
-  const itemsToInsert = data.items.map(item => ({ ...item, plan_id: plan.id, done: false }))
-  const { data: items, error: itemsError } = await supabase
-    .from('study_plan_items')
-    .insert(itemsToInsert)
-    .select()
-  if (itemsError) throw new Error(itemsError.message)
-
-  return { plan: plan as StudyPlan, items: items as StudyPlanItem[] }
-}
-
 export async function getStudyPlan(userId: string): Promise<{ plan: StudyPlan; items: StudyPlanItem[] } | null> {
   const { data: plans } = await supabase
     .from('study_plans')
@@ -975,4 +930,108 @@ export async function generateRevision(
   const data = await response.json()
   if (data.error) throw new Error(data.error)
   return data as RevisionResult
+}
+
+// ─── Agenda Events ────────────────────────────────────────────────────────────
+
+export interface AgendaEvent {
+  id:             string
+  user_id:        string
+  type:           'exam' | 'work' | 'busy' | 'study_slot'
+  title:          string
+  date:           string        // YYYY-MM-DD
+  start_time?:    string        // HH:MM
+  end_time?:      string        // HH:MM
+  is_recurring:   boolean
+  recurring_days?: number[]     // 0=Sun..6=Sat
+  recurring_end?:  string       // YYYY-MM-DD
+  color?:          string
+  created_at:      string
+}
+
+export type AgendaEventInsert = Omit<AgendaEvent, 'id' | 'created_at'>
+
+export async function getAgendaEvents(userId: string): Promise<AgendaEvent[]> {
+  const { data, error } = await supabase
+    .from('agenda_events')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as AgendaEvent[]
+}
+
+export async function createAgendaEvent(event: AgendaEventInsert): Promise<AgendaEvent> {
+  const { data, error } = await supabase
+    .from('agenda_events')
+    .insert([event])
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data as AgendaEvent
+}
+
+export async function deleteAgendaEvent(id: string): Promise<void> {
+  const { error } = await supabase.from('agenda_events').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// ─── Generate Study Plan (with agenda) ───────────────────────────────────────
+
+export async function generateAndSaveStudyPlan(
+  userId: string,
+  goal: string,
+  examDate: string | null,
+  results: QuizResult[],
+  resources: { name: string }[],
+  agendaEvents?: AgendaEvent[],
+) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  const startDate = new Date().toISOString().split('T')[0]
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-study-plan`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ goal, examDate, results, startDate, resources, agendaEvents }),
+    }
+  )
+  if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`)
+  const planData = await response.json()
+  if (planData.error) throw new Error(planData.error)
+
+  // Supprimer l'ancien plan si existant
+  const existing = await getStudyPlan(userId)
+  if (existing?.plan) await deleteStudyPlan(existing.plan.id)
+
+  // Sauvegarder le nouveau plan
+  const { data: planRow, error: planErr } = await supabase
+    .from('study_plans')
+    .insert([{ user_id: userId, goal, exam_date: examDate }])
+    .select()
+    .single()
+  if (planErr) throw new Error(planErr.message)
+
+  const itemsToInsert = planData.items.map((item: Omit<StudyPlanItem, 'id' | 'plan_id' | 'done'>) => ({
+    plan_id: planRow.id,
+    date:    item.date,
+    subject: item.subject,
+    description: item.description,
+    duration_min: item.duration_min,
+    done: false,
+  }))
+  const { data: itemRows, error: itemsErr } = await supabase
+    .from('study_plan_items')
+    .insert(itemsToInsert)
+    .select()
+  if (itemsErr) throw new Error(itemsErr.message)
+
+  return { plan: planRow as StudyPlan, items: itemRows as StudyPlanItem[] }
 }
