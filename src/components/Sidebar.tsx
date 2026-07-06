@@ -1,5 +1,7 @@
 // ─── Sidebar — LearnI ─────────────────────────────────────────────────────────
-import { Home, FileText, BarChart2, Camera, Layers, Bot, DollarSign, GraduationCap, User2, X, RefreshCw, Users, Calendar, BookOpen, Briefcase } from 'lucide-react'
+import { Home, FileText, BarChart2, Layers, Bot, DollarSign,
+         GraduationCap, User2, X, RefreshCw, Users, Calendar,
+         BookOpen, Briefcase, Lock } from 'lucide-react'
 import type { Page, Plan, AppMode } from '../types'
 
 interface Props {
@@ -15,35 +17,119 @@ interface Props {
   onChangeMode:  () => void
 }
 
-export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn, onNavigate, onProFeature, onClose, onChangeMode }: Props) {
+// ─── Définition des accès par plan ───────────────────────────────────────────
+// 'show'   = visible et accessible
+// 'paywall'= visible mais paywall au clic (plan gratuit)
+// 'hidden' = caché (plan inférieur mais on ne le montre pas)
+
+type Access = 'show' | 'paywall' | 'hidden'
+
+interface NavItem {
+  icon:    React.ReactNode
+  label:   string
+  page:    Page
+  badge?:  string // ex: "PRO", "AUTODIDACTE"
+  access:  (plan: Plan, role: string, appMode: AppMode) => Access
+}
+
+const NAV_ITEMS: NavItem[] = [
+  {
+    icon: <Home size={17} />, label: 'Accueil', page: 'home',
+    access: () => 'show',
+  },
+  {
+    icon: <FileText size={17} />, label: 'Générer un quiz', page: 'upload',
+    access: () => 'show',
+  },
+  {
+    icon: <BarChart2 size={17} />, label: 'Mes résultats', page: 'history',
+    access: () => 'show',
+  },
+  {
+    icon: <Layers size={17} />, label: 'Flashcards', page: 'flashcards',
+    badge: 'STARTER',
+    access: (plan, role) => {
+      if (role === 'superadmin') return 'show'
+      if (['starter', 'pro', 'autodidacte', 'teacher'].includes(plan)) return 'show'
+      return 'paywall' // gratuit : visible mais paywall
+    },
+  },
+  {
+    icon: <Calendar size={17} />, label: "Plan d'étude", page: 'study',
+    badge: 'PRO',
+    access: (plan, role) => {
+      if (role === 'superadmin') return 'show'
+      if (['pro', 'autodidacte', 'teacher'].includes(plan)) return 'show'
+      if (plan === 'free') return 'paywall'
+      return 'hidden' // starter : caché
+    },
+  },
+  {
+    icon: <BookOpen size={17} />, label: 'Mes Cours', page: 'courses',
+    badge: 'AUTODIDACTE',
+    access: (plan, role) => {
+      if (role === 'superadmin') return 'show'
+      if (plan === 'autodidacte') return 'show'
+      if (plan === 'free') return 'paywall'
+      return 'hidden' // starter, pro, teacher : caché
+    },
+  },
+  {
+    icon: <Bot size={17} />, label: 'Tuteur IA', page: 'tutor',
+    badge: 'AUTODIDACTE',
+    access: (plan, role) => {
+      if (role === 'superadmin') return 'show'
+      if (plan === 'autodidacte') return 'show'
+      if (plan === 'free') return 'paywall'
+      return 'hidden'
+    },
+  },
+  {
+    icon: <Users size={17} />, label: 'Communautés', page: 'community',
+    badge: 'AUTODIDACTE',
+    access: (plan, role, appMode) => {
+      if (role === 'superadmin') return 'show'
+      if (plan === 'autodidacte' || appMode === 'school') return 'show'
+      if (plan === 'free') return 'paywall'
+      return 'hidden'
+    },
+  },
+  {
+    icon: <Briefcase size={17} />, label: 'Mon Cartable', page: 'cartable',
+    badge: 'PRO',
+    access: (plan, role) => {
+      if (role === 'superadmin') return 'show'
+      if (['pro', 'autodidacte', 'teacher'].includes(plan)) return 'show'
+      if (plan === 'free') return 'paywall'
+      return 'hidden'
+    },
+  },
+  {
+    icon: <DollarSign size={17} />, label: 'Tarifs', page: 'pricing',
+    access: () => 'show',
+  },
+]
+
+const BADGE_COLORS: Record<string, { color: string; bg: string; border: string }> = {
+  STARTER:     { color: '#f5a623', bg: '#2a1f00', border: '#4a3500' },
+  PRO:         { color: '#f87171', bg: '#2a0f0f', border: '#4a1515' },
+  AUTODIDACTE: { color: '#a78bfa', bg: '#2d1b69', border: '#4a3080' },
+}
+
+export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn,
+  onNavigate, onProFeature, onClose, onChangeMode }: Props) {
+
   const go = (page: Page) => { onNavigate(page); onClose() }
 
-  // Items communs à tous les modes
-  const commonItems = [
-    { icon: <Home size={17} />,      label: 'Accueil',         page: 'home'    as Page },
-    { icon: <FileText size={17} />,  label: 'Générer un quiz', page: 'upload'  as Page },
-    { icon: <BarChart2 size={17} />, label: 'Mes résultats',   page: 'history' as Page },
-    { icon: <Bot size={17} />,       label: 'Tuteur IA',       page: 'tutor'   as Page },
-    { icon: <Calendar size={17} />,   label: 'Plan d\'étude',   page: 'study'   as Page },
-    { icon: <BookOpen size={17} />,   label: 'Mes Cours',        page: 'courses' as Page },
-    { icon: <Users size={17} />,     label: 'Communautés',     page: 'community'  as Page },
-    { icon: <Layers size={17} />,     label: 'Flashcards',      page: 'flashcards' as Page },
-    { icon: <Briefcase size={17} />, label: 'Mon Cartable',    page: 'cartable'   as Page },
-    { icon: <DollarSign size={17} />,label: 'Tarifs',          page: 'pricing'    as Page },
-  ]
+  const isSuperadmin = role === 'superadmin'
+  const isTeacher    = role === 'teacher'
 
-  // Items Pro (avec paywall)
-  const proItems = [
-    { icon: <Camera size={17} />,  label: 'Caméra',         feature: 'camera'  },
-    { icon: <Bot size={17} />,     label: 'Explication IA', feature: 'explain' },
-  ]
-
-  // Items école — seulement si mode school et connecté
-  const schoolItems = appMode === 'school' && isLoggedIn ? [
-    role === 'teacher'
-      ? { icon: <GraduationCap size={17} />, label: 'Mes classes', page: 'teacher' as Page }
-      : { icon: <User2 size={17} />,         label: 'Mon profil',  page: 'student' as Page },
-  ] : []
+  // Items école
+  const schoolItem = appMode === 'school' && isLoggedIn
+    ? (isTeacher || isSuperadmin
+        ? { icon: <GraduationCap size={17} />, label: 'Mes classes', page: 'teacher' as Page }
+        : { icon: <User2 size={17} />,         label: 'Mon profil',  page: 'student' as Page })
+    : null
 
   return (
     <>
@@ -64,7 +150,7 @@ export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn, on
           <X size={18} />
         </button>
 
-        {/* Badge mode actuel */}
+        {/* Badge mode */}
         <div style={{
           padding: '7px 12px', borderRadius: 8, marginBottom: 8,
           background: appMode === 'school' ? '#1a1033' : 'var(--bg3)',
@@ -78,72 +164,82 @@ export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn, on
           </button>
         </div>
 
-        {/* Navigation commune */}
-        {commonItems.map(item => {
-          const isActive = currentPage === item.page
+        {/* Navigation */}
+        {NAV_ITEMS.map(item => {
+          const access = isSuperadmin ? 'show' : item.access(plan, role, appMode)
+          if (access === 'hidden') return null
+
+          const isActive  = currentPage === item.page
+          const isLocked  = access === 'paywall'
+          const badgeInfo = item.badge ? BADGE_COLORS[item.badge] : null
+
           return (
-            <button key={item.label} onClick={() => go(item.page)} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px', borderRadius: 8,
-              background: isActive ? 'var(--bg3)' : 'transparent',
-              border: 'none',
-              color: isActive ? 'var(--text)' : 'var(--muted)',
-              fontSize: 14, fontFamily: 'var(--font-body)',
-              width: '100%', textAlign: 'left',
-            }}>
-              {item.icon} {item.label}
+            <button
+              key={item.label}
+              onClick={() => {
+                if (isLocked) { onProFeature('sub'); onClose() }
+                else go(item.page)
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 8,
+                background: isActive ? 'var(--bg3)' : 'transparent',
+                border: 'none',
+                color: isLocked ? '#555' : isActive ? 'var(--text)' : 'var(--muted)',
+                fontSize: 14, fontFamily: 'var(--font-body)',
+                width: '100%', textAlign: 'left', cursor: 'pointer',
+                opacity: isLocked ? 0.7 : 1,
+              }}
+            >
+              {item.icon}
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {isLocked && <Lock size={12} style={{ color: '#555', flexShrink: 0 }} />}
+              {!isLocked && badgeInfo && !isSuperadmin && plan === 'free' && (
+                <span style={{
+                  fontSize: 9, padding: '2px 6px', borderRadius: 20, fontWeight: 700,
+                  background: badgeInfo.bg, color: badgeInfo.color, border: `1px solid ${badgeInfo.border}`,
+                  flexShrink: 0,
+                }}>
+                  {item.badge}
+                </span>
+              )}
             </button>
           )
         })}
 
-        {/* Items école */}
-        {schoolItems.map(item => {
-          const isActive = 'page' in item && currentPage === item.page
-          return (
-            <button key={item.label} onClick={() => 'page' in item && go(item.page)} style={{
+        {/* Item école */}
+        {schoolItem && (
+          <>
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+            <button onClick={() => go(schoolItem.page)} style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '10px 14px', borderRadius: 8,
-              background: isActive ? 'var(--bg3)' : 'transparent',
+              background: currentPage === schoolItem.page ? 'var(--bg3)' : 'transparent',
               border: 'none',
-              color: isActive ? 'var(--text)' : 'var(--muted)',
-              fontSize: 14, fontFamily: 'var(--font-body)',
-              width: '100%', textAlign: 'left',
+              color: currentPage === schoolItem.page ? 'var(--text)' : 'var(--muted)',
+              fontSize: 14, fontFamily: 'var(--font-body)', width: '100%', textAlign: 'left', cursor: 'pointer',
             }}>
-              {item.icon} {item.label}
+              {schoolItem.icon} {schoolItem.label}
             </button>
-          )
-        })}
+          </>
+        )}
 
-        {/* Séparateur */}
-        <div style={{ height: 1, background: 'var(--border)', margin: '8px 0' }} />
-
-        {/* Items Pro */}
-        {proItems.map(item => (
-          <button key={item.label} onClick={() => { onProFeature(item.feature); onClose() }} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 14px', borderRadius: 8,
-            background: 'transparent', border: 'none',
-            color: 'var(--muted)', fontSize: 14,
-            fontFamily: 'var(--font-body)', width: '100%', textAlign: 'left',
-          }}>
-            {item.icon}
-            <span style={{ flex: 1 }}>{item.label}</span>
-            {plan === 'free' && role !== 'superadmin' && (
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: '#2d1b69', color: '#a78bfa', fontWeight: 600, border: '1px solid #4a3080' }}>PRO</span>
-            )}
-          </button>
-        ))}
-
-        {/* Bloc upgrade */}
-        {plan === 'free' && role !== 'superadmin' && (
-          <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg,#1a1a2e,#2d1b69)', border: '1px solid #4a3080', borderRadius: 12, padding: '1rem', textAlign: 'center' }}>
-            <p style={{ fontSize: 12, color: '#a78bfa', marginBottom: 4 }}>🔒 Fonctions avancées</p>
-            <strong style={{ display: 'block', fontFamily: 'var(--font-head)', fontSize: '.85rem', color: '#c4b5fd', marginBottom: 10 }}>
-              Débloquez LearnI Pro
-            </strong>
-            <button onClick={() => { onProFeature('sub'); onClose() }} style={{ width: '100%', padding: '8px 0', background: 'var(--purple)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)' }}>
-              Upgrade — à partir de 10$/mois
-            </button>
+        {/* Bloc upgrade pour gratuit */}
+        {plan === 'free' && !isSuperadmin && (
+          <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
+            <div style={{ background: 'linear-gradient(135deg,#1a1a2e,#2d1b69)', border: '1px solid #4a3080', borderRadius: 12, padding: '1rem', textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: '#a78bfa', marginBottom: 4 }}>🔒 Fonctions avancées</p>
+              <strong style={{ display: 'block', fontFamily: 'var(--font-head)', fontSize: '.85rem', color: '#c4b5fd', marginBottom: 10 }}>
+                Débloquez LearnI
+              </strong>
+              <button onClick={() => { onProFeature('sub'); onClose() }} style={{
+                width: '100%', padding: '8px 0', background: 'var(--purple)',
+                border: 'none', borderRadius: 8, color: '#fff',
+                fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', cursor: 'pointer',
+              }}>
+                Voir les plans →
+              </button>
+            </div>
           </div>
         )}
       </aside>
