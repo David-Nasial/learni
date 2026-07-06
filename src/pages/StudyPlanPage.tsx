@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import {
   Calendar, Trash2, CheckCircle, Circle, Loader, Plus, BookOpen,
-  Briefcase, X, ChevronRight, Repeat, Clock,
+  X, ChevronRight, Repeat, Clock,
 } from 'lucide-react'
 import {
   generateAndSaveStudyPlan, getStudyPlan, toggleStudyItem, deleteStudyPlan,
