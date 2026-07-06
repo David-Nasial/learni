@@ -825,3 +825,154 @@ export async function deleteFlashcardSet(setId: string): Promise<void> {
     .eq('id', setId)
   if (error) throw new Error(error.message)
 }
+
+// ─── Mon Cartable ─────────────────────────────────────────────────────────────
+
+export interface Cahier {
+  id: string
+  name: string
+  course_code: string
+  created_at: string
+  updated_at: string
+  uas?: UA[]
+}
+
+export interface UA {
+  id: string
+  cahier_id: string
+  number: number
+  label: string
+  created_at: string
+  documents?: CartableDocument[]
+}
+
+export interface CartableDocument {
+  id: string
+  ua_id: string
+  filename: string
+  text_content: string
+  file_size: number
+  created_at: string
+}
+
+export interface RevisionExercise {
+  question: string
+  choices: string[]
+  answerIndex: number
+  correctExplanation: string
+  wrongExplanations: Record<string, string>
+  attentionPoints: string[]
+  uaTag: string
+}
+
+export interface RevisionResult {
+  globalAttentionPoints: string[]
+  exercises: RevisionExercise[]
+}
+
+// Cahiers
+export async function getCahiers(userId: string): Promise<Cahier[]> {
+  const { data, error } = await supabase
+    .from('cartable_cahiers')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Cahier[]
+}
+
+export async function createCahier(userId: string, name: string, courseCode: string): Promise<Cahier> {
+  const { data, error } = await supabase
+    .from('cartable_cahiers')
+    .insert({ user_id: userId, name, course_code: courseCode })
+    .select().single()
+  if (error) throw new Error(error.message)
+  return data as Cahier
+}
+
+export async function deleteCahier(cahierId: string): Promise<void> {
+  const { error } = await supabase.from('cartable_cahiers').delete().eq('id', cahierId)
+  if (error) throw new Error(error.message)
+}
+
+// UAs
+export async function getUAs(cahierId: string): Promise<UA[]> {
+  const { data, error } = await supabase
+    .from('cartable_uas')
+    .select('*')
+    .eq('cahier_id', cahierId)
+    .order('number', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as UA[]
+}
+
+export async function createUA(cahierId: string, number: number, label: string): Promise<UA> {
+  const { data, error } = await supabase
+    .from('cartable_uas')
+    .insert({ cahier_id: cahierId, number, label })
+    .select().single()
+  if (error) throw new Error(error.message)
+  return data as UA
+}
+
+export async function deleteUA(uaId: string): Promise<void> {
+  const { error } = await supabase.from('cartable_uas').delete().eq('id', uaId)
+  if (error) throw new Error(error.message)
+}
+
+// Documents
+export async function getDocuments(uaId: string): Promise<CartableDocument[]> {
+  const { data, error } = await supabase
+    .from('cartable_documents')
+    .select('*')
+    .eq('ua_id', uaId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CartableDocument[]
+}
+
+export async function uploadDocument(
+  uaId: string, userId: string, filename: string, textContent: string, fileSize: number
+): Promise<CartableDocument> {
+  const { data, error } = await supabase
+    .from('cartable_documents')
+    .insert({ ua_id: uaId, user_id: userId, filename, text_content: textContent, file_size: fileSize })
+    .select().single()
+  if (error) throw new Error(error.message)
+  return data as CartableDocument
+}
+
+export async function deleteDocument(docId: string): Promise<void> {
+  const { error } = await supabase.from('cartable_documents').delete().eq('id', docId)
+  if (error) throw new Error(error.message)
+}
+
+// Révision
+export async function generateRevision(
+  mode: 'ua' | 'final',
+  cahierName: string,
+  uas: { number: number; label: string; content: string }[],
+  numQuestions: number,
+  language: 'fr' | 'en',
+  existingQuestions?: { question: string }[]
+): Promise<RevisionResult> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cartable-revision`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ mode, cahierName, uas, numQuestions, language, existingQuestions }),
+    }
+  )
+  if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`)
+  const data = await response.json()
+  if (data.error) throw new Error(data.error)
+  return data as RevisionResult
+}

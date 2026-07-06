@@ -18,6 +18,7 @@ import { StudyPlanPage }     from './pages/StudyPlanPage'
 import { CoursesPage }       from './pages/CoursesPage'
 import { CommunityPage }     from './pages/CommunityPage'
 import { FlashcardsPage }    from './pages/FlashcardsPage'
+import { CartablePage }      from './pages/CartablePage'
 import { StudentDashboard }   from './pages/StudentDashboard'
 import { OnboardingModal }    from './components/OnboardingModal'
 import { useLocalStorage }    from './hooks/useLocalStorage'
@@ -294,6 +295,9 @@ function AppInner() {
 
       case 'flashcards':
         return <FlashcardsPage />
+
+      case 'cartable':
+        return <CartablePage />
 
       default:
         return null

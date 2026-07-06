@@ -60,6 +60,7 @@ export type Page =
   | 'study'
   | 'courses'
   | 'flashcards'
+  | 'cartable'
 
 // ─── Community types ──────────────────────────────────────────────────────────
 

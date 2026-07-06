@@ -1,5 +1,5 @@
 // ─── Sidebar — LearnI ─────────────────────────────────────────────────────────
-import { Home, FileText, BarChart2, Camera, Layers, Bot, DollarSign, GraduationCap, User2, X, RefreshCw, Users, Calendar, BookOpen } from 'lucide-react'
+import { Home, FileText, BarChart2, Camera, Layers, Bot, DollarSign, GraduationCap, User2, X, RefreshCw, Users, Calendar, BookOpen, Briefcase } from 'lucide-react'
 import type { Page, Plan, AppMode } from '../types'
 
 interface Props {
@@ -27,7 +27,8 @@ export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn, on
     { icon: <Calendar size={17} />,   label: 'Plan d\'étude',   page: 'study'   as Page },
     { icon: <BookOpen size={17} />,   label: 'Mes Cours',        page: 'courses' as Page },
     { icon: <Users size={17} />,     label: 'Communautés',     page: 'community'  as Page },
-    { icon: <Layers size={17} />,    label: 'Flashcards',      page: 'flashcards' as Page },
+    { icon: <Layers size={17} />,     label: 'Flashcards',      page: 'flashcards' as Page },
+    { icon: <Briefcase size={17} />, label: 'Mon Cartable',    page: 'cartable'   as Page },
     { icon: <DollarSign size={17} />,label: 'Tarifs',          page: 'pricing'    as Page },
   ]
 
