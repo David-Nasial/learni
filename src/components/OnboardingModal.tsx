@@ -50,6 +50,12 @@ const STEPS_STARTER: Step[] = [
     action: { label: 'Générer un quiz', page: 'upload' },
   },
   {
+    emoji: '🃏',
+    title: 'Flashcards IA',
+    desc: 'Nouveau ! Importe un PDF et l\'IA génère des cartes recto/verso pour mémoriser plus vite. Tes jeux sont sauvegardés dans ta bibliothèque.',
+    action: { label: 'Essayer les flashcards', page: 'flashcards' },
+  },
+  {
     emoji: '📊',
     title: 'Historique illimité',
     desc: 'Tous tes résultats sont sauvegardés. Reviens quand tu veux pour voir ta progression.',
@@ -71,9 +77,15 @@ const STEPS_PRO: Step[] = [
   },
   {
     emoji: '📅',
-    title: 'Plan d\'étude IA',
-    desc: 'L\'IA crée un calendrier de révision personnalisé selon tes objectifs et ta disponibilité.',
-    action: { label: 'Créer mon plan', page: 'study' },
+    title: 'Plan d\'étude + Mon Agenda',
+    desc: 'Ajoute tes examens, ton travail et tes disponibilités dans Mon Agenda. L\'IA génère ensuite un plan qui évite tes jours occupés et renforce tes matières faibles.',
+    action: { label: 'Ouvrir mon agenda', page: 'study' },
+  },
+  {
+    emoji: '🎒',
+    title: 'Mon Cartable',
+    desc: 'Organise tes cours en cahiers et unités d\'apprentissage (UA), téléverse tes notes et génère des révisions ciblées avec corrections détaillées.',
+    action: { label: 'Ouvrir mon cartable', page: 'cartable' },
   },
   {
     emoji: '🃏',
