@@ -99,7 +99,7 @@ const NAV_ITEMS: NavItem[] = [
     badge: 'PRO',
     access: (plan, role) => {
       if (role === 'superadmin') return 'show'
-      if (['pro', 'autodidacte', 'teacher'].includes(plan)) return 'show'
+      if (['pro', 'teacher'].includes(plan)) return 'show'
       if (plan === 'free') return 'paywall'
       return 'hidden'
     },

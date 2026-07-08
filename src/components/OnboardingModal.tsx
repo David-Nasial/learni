@@ -120,12 +120,6 @@ const STEPS_AUTODIDACTE: Step[] = [
     action: { label: 'Ouvrir mon agenda', page: 'study' },
   },
   {
-    emoji: '🎒',
-    title: 'Mon Cartable',
-    desc: 'Organise tes cours en cahiers et unités d\'apprentissage (UA), téléverse tes notes et génère des révisions ciblées avec corrections détaillées.',
-    action: { label: 'Ouvrir mon cartable', page: 'cartable' },
-  },
-  {
     emoji: '🏘️',
     title: 'Communautés d\'apprenants',
     desc: 'Rejoins des groupes d\'étude par matière, partage tes notes, participe aux défis hebdomadaires.',

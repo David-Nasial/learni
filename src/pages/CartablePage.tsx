@@ -348,7 +348,7 @@ function RevisionView({ cahier, targetUA, mode, lang, onBack }: {
 // ─── Page principale Cartable ─────────────────────────────────────────────────
 export function CartablePage() {
   const { user, profile } = useAuth()
-  const hasAccess = profile?.role === 'superadmin' || ['pro', 'teacher', 'autodidacte'].includes(profile?.plan ?? '')
+  const hasAccess = profile?.role === 'superadmin' || ['pro', 'teacher'].includes(profile?.plan ?? '')
 
   const [view,        setView]        = useState<View>('list')
   const [cahiers,     setCahiers]     = useState<Cahier[]>([])
