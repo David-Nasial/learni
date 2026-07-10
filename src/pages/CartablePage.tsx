@@ -483,7 +483,7 @@ export function CartablePage() {
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎒</div>
         <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 800, color: 'var(--white)', marginBottom: '.5rem' }}>Mon Cartable</h2>
         <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
-          Disponible avec les plans <strong style={{ color: 'var(--white)' }}>Pro</strong>, <strong style={{ color: 'var(--white)' }}>Autodidacte</strong> et <strong style={{ color: 'var(--white)' }}>Enseignant</strong>.
+          Disponible avec les plans <strong style={{ color: 'var(--white)' }}>Pro</strong> et <strong style={{ color: 'var(--white)' }}>Enseignant</strong>.
         </p>
       </div>
     )
