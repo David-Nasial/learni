@@ -12,6 +12,7 @@ interface Props {
   profile?:   Profile | null
   plan?:      Plan
   onToggleAutodidacteOverride?: () => void
+  onSetSuperadminTestPlan?: (plan: Plan | null) => void
 }
 
 // ─── Apparition au défilement ─────────────────────────────────────────────────
@@ -71,7 +72,7 @@ const PLAN_LABELS: Record<string, { label: string; color: string; bg: string }> 
 }
 
 // ─── Dashboard utilisateur connecté ──────────────────────────────────────────
-function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggleAutodidacteOverride }: Props) {
+function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggleAutodidacteOverride, onSetSuperadminTestPlan }: Props) {
   // `plan` est le plan EFFECTIF (peut être 'pro' si la bascule est active) ;
   // `billedPlan` est le plan réellement payé — c'est lui qu'on affiche en badge principal.
   const billedPlan = profile?.billed_plan ?? plan
@@ -83,6 +84,13 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
   const isTeacher = profile?.role === 'teacher' || plan === 'teacher'
   const isSuperadmin = profile?.role === 'superadmin'
   const isSchool = appMode === 'school'
+
+  // Outil de test Super Admin : `trueSuperadmin` reste vrai même pendant un test de plan
+  // (où `profile.role` est temporairement ramené à 'student'), pour garder l'outil accessible.
+  // On lit `profile.plan` directement (pas le prop `plan`) pour rester cohérent avec
+  // `true_role` dans le même rendu, sans dépendre du useEffect de synchronisation d'App.tsx.
+  const trueSuperadmin = profile?.role === 'superadmin' || profile?.true_role === 'superadmin'
+  const testPlanActive = profile?.true_role === 'superadmin' ? profile?.plan : undefined
 
   const quickActions = [
     {
@@ -223,6 +231,55 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
         </div>
       </div>
 
+      {/* ── Outil de test Super Admin : voir l'app comme n'importe quel plan ── */}
+      {trueSuperadmin && (
+        <div style={{
+          background: 'linear-gradient(135deg, #1a1033, #0f1f2e)',
+          border: '1px solid #3d2b6b', borderRadius: 16, padding: '1.25rem 1.5rem', marginBottom: '2rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem', marginBottom: '.9rem' }}>
+            <div>
+              <div style={{ fontSize: 12, color: '#a78bfa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 3 }}>
+                🛠️ Outil de test — Super Admin
+              </div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+                {testPlanActive
+                  ? <>Tu vois actuellement l'app comme un compte <strong style={{ color: PLAN_LABELS[testPlanActive].color }}>{PLAN_LABELS[testPlanActive].label}</strong> — accès, badges et paywalls réagissent comme pour ce plan.</>
+                  : "Choisis un plan pour voir l'app exactement comme un utilisateur de ce plan la verrait, sans payer."}
+              </p>
+            </div>
+            {testPlanActive && (
+              <button onClick={() => onSetSuperadminTestPlan?.(null)} style={{
+                padding: '7px 14px', background: 'transparent', border: '1px solid #4a3080',
+                borderRadius: 20, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>
+                ← Revenir à Super Admin
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(['free', 'starter', 'pro', 'autodidacte', 'teacher'] as const).map(p => {
+              const info = PLAN_LABELS[p]
+              const active = testPlanActive === p
+              return (
+                <button
+                  key={p}
+                  onClick={() => onSetSuperadminTestPlan?.(active ? null : p)}
+                  style={{
+                    padding: '7px 14px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                    background: active ? info.color : 'transparent',
+                    color: active ? '#100c1c' : info.color,
+                    border: `1.5px solid ${info.color}`,
+                  }}
+                >
+                  {active ? `✓ ${info.label}` : `Passer à ${info.label}`}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Actions rapides ───────────────────────────────────────────── */}
       <h2 style={{
         fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700,
@@ -281,16 +338,16 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
 }
 
 // ─── Page d'accueil visiteur ──────────────────────────────────────────────────
-export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan, onToggleAutodidacteOverride }: Props) {
+export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan, onToggleAutodidacteOverride, onSetSuperadminTestPlan }: Props) {
 
   // Utilisateur connecté avec un plan → dashboard personnalisé
   if (user && plan && plan !== 'free') {
-    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan} onToggleAutodidacteOverride={onToggleAutodidacteOverride} />
+    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan} onToggleAutodidacteOverride={onToggleAutodidacteOverride} onSetSuperadminTestPlan={onSetSuperadminTestPlan} />
   }
 
   // Utilisateur connecté gratuit → dashboard simplifié
   if (user) {
-    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan ?? 'free'} onToggleAutodidacteOverride={onToggleAutodidacteOverride} />
+    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan ?? 'free'} onToggleAutodidacteOverride={onToggleAutodidacteOverride} onSetSuperadminTestPlan={onSetSuperadminTestPlan} />
   }
 
   return (

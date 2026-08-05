@@ -62,10 +62,14 @@ export interface Profile {
   class_code?: string
   stripe_customer_id?: string
   stripe_subscription_id?: string
-  /** Plan réellement payé — présent seulement quand différent de `plan` (bascule Autodidacte ↔ Pro active). */
+  /** Plan réellement payé — présent seulement quand différent de `plan` (bascule Autodidacte ↔ Pro active, ou test Super Admin). */
   billed_plan?: 'free' | 'starter' | 'pro' | 'autodidacte' | 'teacher'
   /** Valeur brute de la bascule, réservée aux abonnés Autodidacte. */
   plan_override?: 'pro' | null
+  /** Plan simulé par un Super Admin pour voir l'app comme un compte de ce plan (outil de test). */
+  test_plan_override?: 'free' | 'starter' | 'pro' | 'autodidacte' | 'teacher' | null
+  /** Présent uniquement quand `role` a été temporairement ramené à 'student' pour simuler un plan — la vraie valeur est ici. */
+  true_role?: 'student' | 'teacher' | 'superadmin'
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
@@ -77,12 +81,22 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   if (error) return null
 
   const raw = data as Profile
+
+  // Un Super Admin qui teste un plan voit l'app EXACTEMENT comme ce plan la
+  // verrait : on ramène `role` à 'student' pour désactiver les bypass superadmin
+  // (badges, paywalls, sidebar…) partout où l'app lit `profile.role`/`profile.plan`.
+  // Vérifié EN PREMIER pour ne jamais être court-circuité par la bascule Autodidacte.
+  if (raw.role === 'superadmin' && raw.test_plan_override) {
+    return { ...raw, plan: raw.test_plan_override, role: 'student', true_role: 'superadmin', billed_plan: raw.plan }
+  }
+
   // Un abonné Autodidacte qui a activé la bascule reçoit l'accès Pro (dont Mon
   // Cartable) sans frais, tant qu'il n'est pas rebasculé — transparent pour le
   // reste de l'app puisque tout le monde lit `profile.plan`.
   if (raw.plan === 'autodidacte' && raw.plan_override === 'pro') {
     return { ...raw, plan: 'pro', billed_plan: 'autodidacte' }
   }
+
   return raw
 }
 
@@ -98,6 +112,16 @@ export async function setAutodidacteProOverride(userId: string, active: boolean)
   const { error } = await supabase
     .from('profiles')
     .update({ plan_override: active ? 'pro' : null })
+    .eq('id', userId)
+  if (error) throw new Error(error.message)
+}
+
+export async function setSuperadminTestPlan(
+  userId: string, plan: 'free' | 'starter' | 'pro' | 'autodidacte' | 'teacher' | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ test_plan_override: plan })
     .eq('id', userId)
   if (error) throw new Error(error.message)
 }

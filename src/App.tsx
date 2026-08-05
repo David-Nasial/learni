@@ -24,7 +24,7 @@ import { HomeworkPage }      from './pages/HomeworkPage'
 import { StudentDashboard }   from './pages/StudentDashboard'
 import { OnboardingModal }    from './components/OnboardingModal'
 import { useLocalStorage }    from './hooks/useLocalStorage'
-import { signOut, saveResultToCloud, setAutodidacteProOverride } from './utils/supabase'
+import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
   GenerateOptions, Question, WrittenGrade,
@@ -269,10 +269,24 @@ function AppInner() {
     }
   }
 
+  // Outil de test Super Admin : voir l'app comme n'importe quel plan, sans payer
+  const handleSetSuperadminTestPlan = async (testPlan: Plan | null) => {
+    if (!user) return
+    const trueSuperadmin = profile?.role === 'superadmin' || profile?.true_role === 'superadmin'
+    if (!trueSuperadmin) return
+    try {
+      await setSuperadminTestPlan(user.id, testPlan)
+      await refreshProfile()
+    } catch (err) {
+      console.error('Bascule test Super Admin — échec :', err)
+      alert(`Impossible de changer de plan de test : ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   const renderPage = () => {
     switch (page) {
       case 'home':
-        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} onToggleAutodidacteOverride={handleToggleAutodidacteOverride} />
+        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} onToggleAutodidacteOverride={handleToggleAutodidacteOverride} onSetSuperadminTestPlan={handleSetSuperadminTestPlan} />
 
       case 'upload':
         return (
