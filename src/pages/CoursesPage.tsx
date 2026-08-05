@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { BookOpen, ChevronRight, ChevronDown, CheckCircle, Circle, Loader, ArrowLeft, Zap, MessageCircle, X, Send } from 'lucide-react'
+import { BookOpen, ChevronRight, ChevronDown, CheckCircle, Circle, Loader, ArrowLeft, Zap, MessageCircle, X, Send, Sparkles, Upload, FileText } from 'lucide-react'
 import {
-  getAssessmentQuestions, generateAndSaveCourse, getUserCourses, getCourseDetails, toggleLesson, callTutor,
+  getAssessmentQuestions, generateAndSaveCourse, generateAndSaveCourseFromDocument,
+  getUserCourses, getCourseDetails, toggleLesson, callTutor,
   type UserCourse, type CourseModule, type CourseLesson,
 } from '../utils/supabase'
+import { extractText } from '../utils/pdfExtract'
 import { useAuth } from '../hooks/useAuth'
 
 type Level = 'debutant' | 'intermediaire' | 'expert'
@@ -89,15 +91,15 @@ function CourseTutor({ lessonTitle, lessonContent, exercise }: {
           position: 'fixed', bottom: 96, right: 28, zIndex: 199,
           width: 'min(380px, calc(100vw - 40px))',
           height: 460,
-          background: 'var(--bg2)', border: '1px solid #3d2b6b',
+          background: 'var(--bg2)', border: '1px solid #4a3080',
           borderRadius: 18, display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 40px rgba(0,0,0,.5)',
           overflow: 'hidden',
         }}>
           {/* En-tête */}
           <div style={{
-            padding: '14px 16px', background: 'linear-gradient(135deg, #12101e, #1a1033)',
-            borderBottom: '1px solid #3d2b6b',
+            padding: '14px 16px', background: 'linear-gradient(135deg, #1a1033, #1a1033)',
+            borderBottom: '1px solid #4a3080',
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
             <div style={{
@@ -214,6 +216,13 @@ export function CoursesPage() {
   const [loadingQuestions,setLoadingQuestions]= useState(false)
   const [error,           setError]          = useState('')
 
+  // Nouveau cours : choix entre génération IA ou téléversement
+  const [newMode,    setNewMode]    = useState<'choice' | 'ai' | 'upload'>('choice')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadTitle,setUploadTitle]= useState('')
+  const [dragging,   setDragging]   = useState(false)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (!user || !hasAccess) { setLoading(false); return }
     getUserCourses(user.id).then(c => { setCourses(c); setLoading(false) })
@@ -259,6 +268,26 @@ export function CoursesPage() {
     setError('')
     try {
       const course = await generateAndSaveCourse(user.id, subject.trim(), lvl)
+      setCourses(prev => [course, ...prev])
+      await openCourse(course)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+      setStep('new')
+    }
+  }
+
+  // Téléverser un cours déjà existant (PDF/Word) — pas d'évaluation de niveau
+  const handleUploadCourse = async () => {
+    if (!uploadFile || !user) return
+    setError('')
+    const title = uploadTitle.trim() || uploadFile.name.replace(/\.[^.]+$/, '')
+    setSubject(title)
+    setLevel(null)
+    setStep('generating')
+    try {
+      const text = await extractText(uploadFile)
+      if (!text.trim()) throw new Error('Le fichier semble vide ou illisible.')
+      const course = await generateAndSaveCourseFromDocument(user.id, text, title)
       setCourses(prev => [course, ...prev])
       await openCourse(course)
     } catch (err) {
@@ -397,8 +426,8 @@ export function CoursesPage() {
               {/* Exercice */}
               {activeLesson.exercise && (
                 <div style={{
-                  background: 'linear-gradient(135deg, #12101e, #1a1033)',
-                  border: '1px solid #3d2b6b', borderRadius: 16, padding: '1.5rem', marginBottom: '1.5rem',
+                  background: 'linear-gradient(135deg, #1a1033, #1a1033)',
+                  border: '1px solid #4a3080', borderRadius: 16, padding: '1.5rem', marginBottom: '1.5rem',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '.75rem' }}>
                     <Zap size={18} style={{ color: '#a78bfa' }} />
@@ -444,7 +473,8 @@ export function CoursesPage() {
           L'IA crée votre cours…
         </h2>
         <p style={{ color: 'var(--muted)', fontSize: 14 }}>
-          Génération des modules, leçons et exercices pour <strong style={{ color: 'var(--white)' }}>{subject}</strong> — niveau {level && LEVEL_LABELS[level]}
+          Génération des modules, leçons et exercices pour <strong style={{ color: 'var(--white)' }}>{subject}</strong>
+          {level ? ` — niveau ${LEVEL_LABELS[level]}` : ''}
         </p>
         <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: '.5rem' }}>Cela peut prendre 15-30 secondes…</p>
       </div>
@@ -520,63 +550,181 @@ export function CoursesPage() {
   if (step === 'new') {
     return (
       <div className="fade-in" style={{ maxWidth: 600, margin: '2rem auto', padding: '0 1.5rem' }}>
-        <button onClick={() => setStep('list')} style={{
+        <button onClick={() => newMode === 'choice' ? setStep('list') : setNewMode('choice')} style={{
           display: 'flex', alignItems: 'center', gap: 6, background: 'none',
           border: 'none', color: 'var(--muted)', fontSize: 13, cursor: 'pointer', marginBottom: '1.5rem',
         }}>
           <ArrowLeft size={14} /> Retour
         </button>
-        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16, padding: '2rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', color: 'var(--white)', marginBottom: '.4rem' }}>
-            ✨ Nouveau cours
-          </h2>
-          <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: '1.5rem', lineHeight: 1.6 }}>
-            L'IA va d'abord évaluer ton niveau avec 5 questions, puis générer un cours complet adapté.
-          </p>
-          <label style={{ fontSize: 13, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>
-            Que veux-tu apprendre ?
-          </label>
-          <input
-            value={subject}
-            onChange={e => setSubject(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleStartNew()}
-            placeholder="ex: Cybersécurité, Python, Histoire…"
-            style={{
-              width: '100%', padding: '12px 14px', background: 'var(--bg3)',
-              border: '1px solid var(--border)', borderRadius: 10,
-              color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-body)',
-              boxSizing: 'border-box', marginBottom: '1rem',
-            }}
-          />
-          {/* Suggestions */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.25rem' }}>
-            {SUGGESTED.map(s => (
-              <button key={s} onClick={() => setSubject(s)} style={{
-                padding: '5px 12px', background: subject === s ? 'var(--purple)' : 'var(--bg3)',
-                border: `1px solid ${subject === s ? 'var(--purple)' : 'var(--border)'}`,
-                borderRadius: 20, color: subject === s ? '#fff' : 'var(--muted)', fontSize: 12, cursor: 'pointer',
-              }}>
-                {s}
+
+        {/* Choix : générer avec l'IA ou téléverser */}
+        {newMode === 'choice' && (
+          <div>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', color: 'var(--white)', marginBottom: '1.5rem' }}>
+              Nouveau cours
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <button onClick={() => setNewMode('ai')} style={{
+                background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16,
+                padding: '1.75rem 1.5rem', textAlign: 'left', cursor: 'pointer', transition: 'border-color .2s',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--purple)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              >
+                <Sparkles size={26} style={{ color: 'var(--purple-l)', marginBottom: '.75rem' }} />
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', color: 'var(--white)', marginBottom: '.4rem' }}>Générer avec l'IA</h3>
+                <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  Dis-nous ce que tu veux apprendre — l'IA évalue ton niveau et crée un cours complet.
+                </p>
               </button>
-            ))}
-          </div>
-          {error && (
-            <div style={{ padding: '8px 12px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 8, color: '#f87171', fontSize: 13, marginBottom: '1rem' }}>
-              {error}
+              <button onClick={() => setNewMode('upload')} style={{
+                background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16,
+                padding: '1.75rem 1.5rem', textAlign: 'left', cursor: 'pointer', transition: 'border-color .2s',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--purple)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              >
+                <Upload size={26} style={{ color: 'var(--purple-l)', marginBottom: '.75rem' }} />
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', color: 'var(--white)', marginBottom: '.4rem' }}>Téléverser mon cours</h3>
+                <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  Tu as déjà le cours en PDF ou Word ? Importe-le et l'IA l'organise en modules et exercices.
+                </p>
+              </button>
             </div>
-          )}
-          <button onClick={handleStartNew} disabled={!subject.trim() || loadingQuestions} style={{
-            width: '100%', padding: '12px', background: subject.trim() && !loadingQuestions ? 'var(--purple)' : 'var(--bg3)',
-            border: 'none', borderRadius: 10, color: '#fff',
-            fontFamily: 'var(--font-head)', fontSize: 14, fontWeight: 600,
-            cursor: subject.trim() && !loadingQuestions ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}>
-            {loadingQuestions
-              ? <><Loader size={16} className="spin" /> Préparation des questions…</>
-              : 'Évaluer mon niveau →'}
-          </button>
-        </div>
+          </div>
+        )}
+
+        {/* Générer avec l'IA (flux existant) */}
+        {newMode === 'ai' && (
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16, padding: '2rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', color: 'var(--white)', marginBottom: '.4rem' }}>
+              ✨ Générer avec l'IA
+            </h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              L'IA va d'abord évaluer ton niveau avec 5 questions, puis générer un cours complet adapté.
+            </p>
+            <label style={{ fontSize: 13, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>
+              Que veux-tu apprendre ?
+            </label>
+            <input
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleStartNew()}
+              placeholder="ex: Cybersécurité, Python, Histoire…"
+              style={{
+                width: '100%', padding: '12px 14px', background: 'var(--bg3)',
+                border: '1px solid var(--border)', borderRadius: 10,
+                color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-body)',
+                boxSizing: 'border-box', marginBottom: '1rem',
+              }}
+            />
+            {/* Suggestions */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.25rem' }}>
+              {SUGGESTED.map(s => (
+                <button key={s} onClick={() => setSubject(s)} style={{
+                  padding: '5px 12px', background: subject === s ? 'var(--purple)' : 'var(--bg3)',
+                  border: `1px solid ${subject === s ? 'var(--purple)' : 'var(--border)'}`,
+                  borderRadius: 20, color: subject === s ? '#fff' : 'var(--muted)', fontSize: 12, cursor: 'pointer',
+                }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            {error && (
+              <div style={{ padding: '8px 12px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 8, color: '#f87171', fontSize: 13, marginBottom: '1rem' }}>
+                {error}
+              </div>
+            )}
+            <button onClick={handleStartNew} disabled={!subject.trim() || loadingQuestions} style={{
+              width: '100%', padding: '12px', background: subject.trim() && !loadingQuestions ? 'var(--purple)' : 'var(--bg3)',
+              border: 'none', borderRadius: 10, color: '#fff',
+              fontFamily: 'var(--font-head)', fontSize: 14, fontWeight: 600,
+              cursor: subject.trim() && !loadingQuestions ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              {loadingQuestions
+                ? <><Loader size={16} className="spin" /> Préparation des questions…</>
+                : 'Évaluer mon niveau →'}
+            </button>
+          </div>
+        )}
+
+        {/* Téléverser un cours existant */}
+        {newMode === 'upload' && (
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16, padding: '2rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', color: 'var(--white)', marginBottom: '.4rem' }}>
+              📄 Téléverser mon cours
+            </h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              L'IA organise ton document en modules, leçons et exercices — sans inventer de contenu hors de ce que tu fournis.
+            </p>
+
+            <div
+              onClick={() => uploadInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => {
+                e.preventDefault(); setDragging(false)
+                const f = e.dataTransfer.files[0]; if (f) setUploadFile(f)
+              }}
+              style={{
+                background: dragging ? '#1a1520' : 'var(--bg3)',
+                border: `2px dashed ${dragging || uploadFile ? 'var(--purple)' : 'var(--border)'}`,
+                borderRadius: 14, padding: '2.25rem 1.5rem', textAlign: 'center',
+                cursor: 'pointer', transition: 'all .25s', marginBottom: '1rem',
+              }}
+            >
+              <input
+                ref={uploadInputRef} type="file" accept=".pdf,.docx,.txt,.md" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) setUploadFile(f) }}
+              />
+              {uploadFile ? (
+                <>
+                  <FileText size={32} color="var(--green)" style={{ marginBottom: 10 }} />
+                  <h3 style={{ fontFamily: 'var(--font-head)', color: 'var(--green)', marginBottom: 4, fontSize: 14 }}>{uploadFile.name}</h3>
+                  <p style={{ fontSize: 12, color: 'var(--muted)' }}>{(uploadFile.size / 1024).toFixed(0)} Ko — cliquez pour changer</p>
+                </>
+              ) : (
+                <>
+                  <Upload size={32} color="var(--muted)" style={{ marginBottom: 10 }} />
+                  <h3 style={{ fontFamily: 'var(--font-head)', color: 'var(--white)', marginBottom: 4, fontSize: 14 }}>Glissez votre fichier ici</h3>
+                  <p style={{ fontSize: 12, color: 'var(--muted)' }}>ou cliquez pour parcourir</p>
+                  <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>PDF, Word (.docx), TXT, MD</p>
+                </>
+              )}
+            </div>
+
+            <label style={{ fontSize: 13, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>
+              Titre du cours (optionnel)
+            </label>
+            <input
+              value={uploadTitle}
+              onChange={e => setUploadTitle(e.target.value)}
+              placeholder={uploadFile ? uploadFile.name.replace(/\.[^.]+$/, '') : 'ex: Comptabilité — session 1'}
+              style={{
+                width: '100%', padding: '12px 14px', background: 'var(--bg3)',
+                border: '1px solid var(--border)', borderRadius: 10,
+                color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-body)',
+                boxSizing: 'border-box', marginBottom: '1rem',
+              }}
+            />
+
+            {error && (
+              <div style={{ padding: '8px 12px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 8, color: '#f87171', fontSize: 13, marginBottom: '1rem' }}>
+                {error}
+              </div>
+            )}
+
+            <button onClick={handleUploadCourse} disabled={!uploadFile} style={{
+              width: '100%', padding: '12px', background: uploadFile ? 'var(--purple)' : 'var(--bg3)',
+              border: 'none', borderRadius: 10, color: '#fff',
+              fontFamily: 'var(--font-head)', fontSize: 14, fontWeight: 600,
+              cursor: uploadFile ? 'pointer' : 'not-allowed',
+            }}>
+              Créer mon cours →
+            </button>
+          </div>
+        )}
       </div>
     )
   }
@@ -588,7 +736,7 @@ export function CoursesPage() {
         <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--white)' }}>
           🎓 Mes Cours
         </h2>
-        <button onClick={() => { setSubject(''); setQuestions([]); setAnswers([]); setLevel(null); setStep('new') }} style={{
+        <button onClick={() => { setSubject(''); setQuestions([]); setAnswers([]); setLevel(null); setNewMode('choice'); setUploadFile(null); setUploadTitle(''); setStep('new') }} style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '9px 18px', background: 'var(--purple)',
           border: 'none', borderRadius: 8, color: '#fff',
@@ -608,7 +756,7 @@ export function CoursesPage() {
           <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: '1.5rem', lineHeight: 1.6 }}>
             Dis à l'IA ce que tu veux apprendre — elle évalue ton niveau et génère un cours complet avec modules et exercices.
           </p>
-          <button onClick={() => { setSubject(''); setQuestions([]); setAnswers([]); setLevel(null); setStep('new') }} style={{
+          <button onClick={() => { setSubject(''); setQuestions([]); setAnswers([]); setLevel(null); setNewMode('choice'); setUploadFile(null); setUploadTitle(''); setStep('new') }} style={{
             padding: '12px 28px', background: 'var(--purple)', border: 'none',
             borderRadius: 10, color: '#fff', fontFamily: 'var(--font-head)',
             fontSize: 14, fontWeight: 600, cursor: 'pointer',

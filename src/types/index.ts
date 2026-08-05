@@ -1,10 +1,18 @@
 export interface Question {
   id: string
+  type: 'mcq' | 'written'
   question: string
   choices: string[]
   answerIndex: number
   explanation: string
   topic?: string
+  modelAnswer?: string
+  keyPoints?: string[]
+}
+
+export interface WrittenGrade {
+  isCorrect: boolean
+  feedback: string
 }
 
 export interface QuizSession {
@@ -12,7 +20,7 @@ export interface QuizSession {
   title: string
   questions: Question[]
   currentIndex: number
-  answers: (number | null)[]
+  answers: (number | string | null)[]
   startedAt: Date
   finishedAt?: Date
 }
@@ -27,16 +35,19 @@ export interface QuizResult {
   durationSeconds: number
 }
 
-export type QuizLength = 10 | 20
+export type QuizLength = 10 | 20 | 35
 export type QuestionType = 'all' | 'facts' | 'dates' | 'definitions'
+export type AnswerMode = 'mcq' | 'mixed'
 export type QuizLanguage = 'fr' | 'en'
 
 export interface GenerateOptions {
   pdfText: string
   numQuestions: QuizLength
   questionType: QuestionType
+  answerMode: AnswerMode
   language: QuizLanguage
   documentTitle: string
+  teacherSpecs?: string
 }
 
 export type Plan = 'free' | 'starter' | 'pro' | 'autodidacte' | 'teacher'
@@ -48,6 +59,7 @@ export type Page =
   | 'home'
   | 'upload'
   | 'generating'
+  | 'grading'
   | 'quiz'
   | 'results'
   | 'history'
@@ -61,6 +73,7 @@ export type Page =
   | 'courses'
   | 'flashcards'
   | 'cartable'
+  | 'homework'
 
 // ─── Community types ──────────────────────────────────────────────────────────
 

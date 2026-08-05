@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+import { FileText, Zap, TrendingUp, Bot, Users, School, BarChart2, Layers, Calendar, GraduationCap, Lightbulb, BadgeCheck } from 'lucide-react'
 import type { Page, AppMode, Plan } from '../types'
 import type { Profile } from '../utils/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -9,21 +11,48 @@ interface Props {
   user?:      User | null
   profile?:   Profile | null
   plan?:      Plan
+  onToggleAutodidacteOverride?: () => void
+}
+
+// ─── Apparition au défilement ─────────────────────────────────────────────────
+function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setVisible(true); observer.disconnect() }
+    }, { threshold: 0.15 })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={ref} style={{
+      opacity: visible ? 1 : 0,
+      transform: visible ? 'translateY(0)' : 'translateY(22px)',
+      transition: `opacity .6s ease ${delay}ms, transform .6s cubic-bezier(.2,.7,.3,1) ${delay}ms`,
+    }}>
+      {children}
+    </div>
+  )
 }
 
 const steps = [
-  { n: '01', icon: '📄', title: 'Importez votre cours', desc: 'PDF, manuel, notes — n\'importe quel document.' },
-  { n: '02', icon: '⚡', title: 'L\'IA génère le quiz', desc: 'L\'IA analyse le contenu et crée des QCM en quelques secondes.' },
-  { n: '03', icon: '🎯', title: 'Révisez & progressez', desc: 'Répondez, consultez les explications, suivez vos progrès.' },
+  { n: '01', icon: FileText,   title: 'Importez votre cours', desc: 'PDF, manuel, notes — n\'importe quel document.' },
+  { n: '02', icon: Zap,        title: 'L\'IA génère le quiz', desc: 'L\'IA analyse le contenu et crée des QCM en quelques secondes.' },
+  { n: '03', icon: TrendingUp, title: 'Révisez & progressez', desc: 'Répondez, consultez les explications, suivez vos progrès.' },
 ]
 
 const features = [
-  { icon: '📄', title: 'Import PDF & TXT',     desc: 'Téléchargez un manuel ou vos notes. L\'IA génère des QCM pertinents en quelques secondes.', tag: 'Gratuit',     tagColor: '#22c55e', tagBg: '#1a3a1a' },
-  { icon: '🤖', title: 'Tuteur IA',            desc: 'Comme ChatGPT, mais spécialisé pour vos cours. 3 modes : débutant, prof strict, examen.',    tag: 'Autodidacte', tagColor: '#a78bfa', tagBg: '#2d1b69' },
-  { icon: '🏘️', title: 'Communautés',          desc: 'Groupes d\'étude par matière. Classements, défis, partage de notes.',                        tag: 'Autodidacte', tagColor: '#a78bfa', tagBg: '#2d1b69' },
-  { icon: '🏫', title: 'Mode Établissement',    desc: 'Classes, suivi par élève, partage de documents. Espace Discord-like pour chaque classe.',     tag: 'Scolaire',    tagColor: '#60a5fa', tagBg: '#1e3a5f' },
-  { icon: '📊', title: 'Suivi des progrès',     desc: 'Historique complet, statistiques, identification des points faibles.',                        tag: 'Gratuit',     tagColor: '#22c55e', tagBg: '#1a3a1a' },
-  { icon: '🃏', title: 'Flashcards IA',         desc: 'Révision par cartes mémoire générées automatiquement depuis vos documents.',                  tag: 'Pro',         tagColor: '#f87171', tagBg: '#2a0f0f' },
+  { icon: FileText, title: 'Import PDF & TXT',     desc: 'Téléchargez un manuel ou vos notes. L\'IA génère des QCM pertinents en quelques secondes.', tag: 'Gratuit',     tagColor: '#22c55e', tagBg: '#1a3a1a' },
+  { icon: Bot,       title: 'Tuteur IA',            desc: 'Comme ChatGPT, mais spécialisé pour vos cours. 3 modes : débutant, prof strict, examen.',    tag: 'Autodidacte', tagColor: '#a78bfa', tagBg: '#2d1b69' },
+  { icon: Users,     title: 'Communautés',          desc: 'Groupes d\'étude par matière. Classements, défis, partage de notes.',                        tag: 'Autodidacte', tagColor: '#a78bfa', tagBg: '#2d1b69' },
+  { icon: School,    title: 'Mode Établissement',    desc: 'Classes, suivi par élève, partage de documents. Espace Discord-like pour chaque classe.',     tag: 'Scolaire',    tagColor: '#60a5fa', tagBg: '#1e3a5f' },
+  { icon: BarChart2, title: 'Suivi des progrès',     desc: 'Historique complet, statistiques, identification des points faibles.',                        tag: 'Gratuit',     tagColor: '#22c55e', tagBg: '#1a3a1a' },
+  { icon: Layers,    title: 'Flashcards IA',         desc: 'Révision par cartes mémoire générées automatiquement depuis vos documents.',                  tag: 'Pro',         tagColor: '#f87171', tagBg: '#2a0f0f' },
 ]
 
 const stats = [
@@ -42,8 +71,12 @@ const PLAN_LABELS: Record<string, { label: string; color: string; bg: string }> 
 }
 
 // ─── Dashboard utilisateur connecté ──────────────────────────────────────────
-function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props) {
-  const planInfo = PLAN_LABELS[plan ?? 'free'] ?? PLAN_LABELS.free
+function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggleAutodidacteOverride }: Props) {
+  // `plan` est le plan EFFECTIF (peut être 'pro' si la bascule est active) ;
+  // `billedPlan` est le plan réellement payé — c'est lui qu'on affiche en badge principal.
+  const billedPlan = profile?.billed_plan ?? plan
+  const autodidacteOverrideActive = profile?.plan_override === 'pro'
+  const planInfo = PLAN_LABELS[billedPlan ?? 'free'] ?? PLAN_LABELS.free
   const firstName = profile?.name?.split(' ')[0] ?? profile?.email?.split('@')[0] ?? 'toi'
   const isAutodidacte = plan === 'autodidacte'
   const isPro = plan === 'pro' || plan === 'autodidacte'
@@ -53,35 +86,35 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
 
   const quickActions = [
     {
-      icon: '📄', label: 'Générer un quiz', desc: 'Importer un document et créer un quiz instantanément', page: 'upload' as Page,
+      icon: FileText, label: 'Générer un quiz', desc: 'Importer un document et créer un quiz instantanément', page: 'upload' as Page,
       color: 'var(--red)', always: true,
     },
     {
-      icon: '📊', label: 'Mon historique', desc: 'Voir mes résultats et ma progression', page: 'history' as Page,
+      icon: BarChart2, label: 'Mon historique', desc: 'Voir mes résultats et ma progression', page: 'history' as Page,
       color: '#3b82f6', always: true,
     },
     {
-      icon: '🤖', label: 'Tuteur IA', desc: 'Poser une question à mon tuteur personnel', page: 'tutor' as Page,
+      icon: Bot, label: 'Tuteur IA', desc: 'Poser une question à mon tuteur personnel', page: 'tutor' as Page,
       color: '#a78bfa', always: false, show: isAutodidacte || isSuperadmin,
     },
     {
-      icon: '📅', label: 'Plan d\'étude', desc: 'Mon calendrier de révision intelligent', page: 'study' as Page,
+      icon: Calendar, label: 'Plan d\'étude', desc: 'Mon calendrier de révision intelligent', page: 'study' as Page,
       color: '#10b981', always: false, show: isPro || isSchool || isSuperadmin,
     },
     {
-      icon: '🎓', label: 'Mes Cours', desc: 'Cours générés par l\'IA sur mes sujets', page: 'courses' as Page,
+      icon: GraduationCap, label: 'Mes Cours', desc: 'Cours générés par l\'IA sur mes sujets', page: 'courses' as Page,
       color: '#8b5cf6', always: false, show: isAutodidacte || isSuperadmin,
     },
     {
-      icon: '🏘️', label: 'Communautés', desc: 'Rejoindre des groupes d\'étude', page: 'community' as Page,
+      icon: Users, label: 'Communautés', desc: 'Rejoindre des groupes d\'étude', page: 'community' as Page,
       color: '#f59e0b', always: false, show: isAutodidacte || isSchool || isSuperadmin,
     },
     {
-      icon: '🃏', label: 'Flashcards', desc: 'Cartes recto/verso générées par l\'IA', page: 'flashcards' as Page,
+      icon: Layers, label: 'Flashcards', desc: 'Cartes recto/verso générées par l\'IA', page: 'flashcards' as Page,
       color: '#a78bfa', always: false, show: isPro || isAutodidacte || isSuperadmin,
     },
     {
-      icon: '🏫', label: 'Ma classe', desc: 'Tableau de bord enseignant', page: 'teacher' as Page,
+      icon: School, label: 'Ma classe', desc: 'Tableau de bord enseignant', page: 'teacher' as Page,
       color: '#60a5fa', always: false, show: isTeacher || isSuperadmin,
     },
   ].filter(a => a.always || a.show)
@@ -109,7 +142,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-              Bon retour 👋
+              Bon retour
             </div>
             <h1 style={{
               fontFamily: 'var(--font-head)', fontSize: 'clamp(1.4rem,3vw,2rem)',
@@ -121,19 +154,57 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
               Prêt à apprendre quelque chose aujourd'hui ?
             </p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-            <span style={{
-              padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-              background: planInfo.bg, color: planInfo.color, border: `1px solid ${planInfo.color}33`,
-            }}>
-              ✦ Plan {planInfo.label}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+              Ton plan
             </span>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+              background: planInfo.bg, color: planInfo.color, border: `1.5px solid ${planInfo.color}`,
+            }}>
+              <BadgeCheck size={15} />
+              {planInfo.label}
+            </span>
+
+            {autodidacteOverrideActive && (
+              <>
+                <div style={{ width: 0, height: 10, borderLeft: '1.5px dashed var(--muted)' }} />
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+                  background: PLAN_LABELS.starter.bg, color: PLAN_LABELS.starter.color, border: `1.5px solid ${PLAN_LABELS.starter.color}`,
+                }}>
+                  <BadgeCheck size={15} />
+                  {PLAN_LABELS.pro.label}
+                </span>
+              </>
+            )}
+
             {plan === 'free' && (
               <button onClick={onUpgrade} style={{
                 padding: '6px 14px', background: 'var(--purple)', border: 'none',
                 borderRadius: 20, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
               }}>
                 Passer à Pro →
+              </button>
+            )}
+
+            {billedPlan === 'autodidacte' && (
+              <button
+                onClick={onToggleAutodidacteOverride}
+                title={autodidacteOverrideActive
+                  ? 'Retrouve le Tuteur IA, Mes Cours et les Communautés'
+                  : "Accède temporairement à Mon Cartable, inclus dans ton abonnement Autodidacte"}
+                style={{
+                  padding: '6px 14px',
+                  background: autodidacteOverrideActive ? 'transparent' : 'var(--purple)',
+                  border: autodidacteOverrideActive ? '1px solid #4a3080' : 'none',
+                  borderRadius: 20, color: autodidacteOverrideActive ? '#a78bfa' : '#fff',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                {autodidacteOverrideActive ? '← Revenir Autodidacte' : 'Passer à Pro →'}
               </button>
             )}
           </div>
@@ -147,7 +218,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
             fontSize: 14, fontWeight: 700, cursor: 'pointer',
             boxShadow: '0 0 24px rgba(224,60,60,.3)',
           }}>
-            🚀 Générer un quiz maintenant
+            Générer un quiz maintenant
           </button>
         </div>
       </div>
@@ -174,7 +245,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
             onMouseEnter={e => { e.currentTarget.style.borderColor = action.color; e.currentTarget.style.transform = 'translateY(-2px)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}
           >
-            <div style={{ fontSize: '1.75rem', marginBottom: '.6rem' }}>{action.icon}</div>
+            <action.icon size={26} color={action.color} style={{ marginBottom: '.6rem' }} />
             <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, color: 'var(--white)', fontSize: '.95rem', marginBottom: '.3rem' }}>
               {action.label}
             </div>
@@ -191,7 +262,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
         border: '1px solid #1a4a3a', borderRadius: 14, padding: '1.25rem 1.5rem',
         display: 'flex', alignItems: 'center', gap: '1rem',
       }}>
-        <div style={{ fontSize: '2rem', flexShrink: 0 }}>💡</div>
+        <Lightbulb size={28} color="#6ee7b7" style={{ flexShrink: 0 }} />
         <div>
           <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, color: '#6ee7b7', fontSize: 13, marginBottom: 4 }}>
             Conseil LearnI
@@ -210,16 +281,16 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode }: Props)
 }
 
 // ─── Page d'accueil visiteur ──────────────────────────────────────────────────
-export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan }: Props) {
+export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan, onToggleAutodidacteOverride }: Props) {
 
   // Utilisateur connecté avec un plan → dashboard personnalisé
   if (user && plan && plan !== 'free') {
-    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan} />
+    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan} onToggleAutodidacteOverride={onToggleAutodidacteOverride} />
   }
 
   // Utilisateur connecté gratuit → dashboard simplifié
   if (user) {
-    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan ?? 'free'} />
+    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan ?? 'free'} onToggleAutodidacteOverride={onToggleAutodidacteOverride} />
   }
 
   return (
@@ -235,11 +306,14 @@ export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan }
           fontSize: 'clamp(2.2rem, 5.5vw, 3.4rem)',
           fontWeight: 900, color: 'var(--white)', lineHeight: 1.1, marginBottom: '1rem',
           letterSpacing: '-0.03em',
+          animation: 'heroUp .7s cubic-bezier(.2,.7,.3,1) both',
         }}>
           Révisez{' '}
           <span style={{
-            background: 'linear-gradient(135deg, #e03c3c, #f59e0b)',
+            background: 'linear-gradient(120deg, #e03c3c, #f59e0b, #e03c3c)',
+            backgroundSize: '200% auto',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            animation: 'gradientShift 5s ease-in-out infinite',
           }}>
             10× plus vite
           </span>
@@ -249,6 +323,7 @@ export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan }
         <p style={{
           margin: '0 auto 2rem', maxWidth: 500,
           color: 'var(--muted)', lineHeight: 1.75, fontSize: 16,
+          animation: 'heroUp .7s cubic-bezier(.2,.7,.3,1) 100ms both',
         }}>
           Importez un PDF — LearnI génère un quiz sur mesure en quelques secondes.
           {appMode === 'school'
@@ -256,20 +331,31 @@ export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan }
             : ' Discutez avec votre tuteur IA, rejoignez des communautés, progressez.'}
         </p>
 
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div style={{
+          display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap',
+          animation: 'heroUp .7s cubic-bezier(.2,.7,.3,1) 200ms both',
+        }}>
           <button onClick={() => onNavigate('upload')} style={{
             padding: '14px 36px', borderRadius: 12, fontSize: 15, fontWeight: 700,
             background: 'var(--red)', border: 'none', color: '#fff',
             fontFamily: 'var(--font-body)', cursor: 'pointer',
             boxShadow: '0 0 32px rgba(224,60,60,.35)',
-          }}>
-            🚀 Commencer gratuitement
+            transition: 'transform .2s, box-shadow .2s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 40px rgba(224,60,60,.5)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 0 32px rgba(224,60,60,.35)' }}
+          >
+            Commencer gratuitement
           </button>
           <button onClick={onUpgrade} style={{
             padding: '14px 28px', borderRadius: 12, fontSize: 15, fontWeight: 500,
             background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)',
             fontFamily: 'var(--font-body)', cursor: 'pointer',
-          }}>
+            transition: 'border-color .2s, transform .2s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}
+          >
             Voir les plans →
           </button>
         </div>
@@ -278,6 +364,7 @@ export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan }
         <div style={{
           display: 'flex', justifyContent: 'center', gap: '2rem',
           marginTop: '2.5rem', flexWrap: 'wrap',
+          animation: 'heroUp .7s cubic-bezier(.2,.7,.3,1) 300ms both',
         }}>
           {stats.map(s => (
             <div key={s.value} style={{ textAlign: 'center' }}>
@@ -290,103 +377,117 @@ export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan }
 
       {/* ── Comment ça marche ──────────────────────────────────────────── */}
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '2rem 1.5rem' }}>
-        <h2 style={{
-          fontFamily: 'var(--font-head)', fontSize: 'clamp(1.2rem,3vw,1.6rem)',
-          fontWeight: 800, color: 'var(--white)', textAlign: 'center', marginBottom: '2rem',
-        }}>
-          Prêt en 3 étapes
-        </h2>
+        <Reveal>
+          <h2 style={{
+            fontFamily: 'var(--font-head)', fontSize: 'clamp(1.2rem,3vw,1.6rem)',
+            fontWeight: 800, color: 'var(--white)', textAlign: 'center', marginBottom: '2rem',
+          }}>
+            Prêt en 3 étapes
+          </h2>
+        </Reveal>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
           {steps.map((step, i) => (
-            <div key={step.n} style={{
-              background: 'var(--bg2)', border: '1px solid var(--border)',
-              borderRadius: 16, padding: '1.5rem', position: 'relative', overflow: 'hidden',
-            }}>
+            <Reveal key={step.n} delay={i * 120}>
               <div style={{
-                position: 'absolute', top: 12, right: 14,
-                fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '2.5rem',
-                color: 'var(--bg3)', lineHeight: 1,
-              }}>{step.n}</div>
-              <div style={{ fontSize: '2rem', marginBottom: '.75rem' }}>{step.icon}</div>
-              <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700, color: 'var(--white)', marginBottom: '.4rem' }}>{step.title}</h3>
-              <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>{step.desc}</p>
-              {i < steps.length - 1 && (
-                <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', color: 'var(--border2)', fontSize: 20, display: 'none' }}>→</div>
-              )}
-            </div>
+                background: 'var(--bg2)', border: '1px solid var(--border)',
+                borderRadius: 16, padding: '1.5rem', position: 'relative', overflow: 'hidden',
+                transition: 'border-color .2s, transform .2s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.transform = 'translateY(-3px)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}
+              >
+                <div style={{
+                  position: 'absolute', top: 12, right: 14,
+                  fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '2.5rem',
+                  color: 'var(--bg3)', lineHeight: 1,
+                }}>{step.n}</div>
+                <step.icon size={28} color="var(--red)" style={{ marginBottom: '.75rem' }} />
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700, color: 'var(--white)', marginBottom: '.4rem' }}>{step.title}</h3>
+                <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>{step.desc}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </div>
 
       {/* ── Fonctionnalités ────────────────────────────────────────────── */}
       <div style={{ maxWidth: 1020, margin: '0 auto', padding: '1rem 1.5rem 3rem' }}>
-        <h2 style={{
-          fontFamily: 'var(--font-head)', fontSize: 'clamp(1.2rem,3vw,1.6rem)',
-          fontWeight: 800, color: 'var(--white)', textAlign: 'center', marginBottom: '2rem',
-        }}>
-          Tout ce dont vous avez besoin pour réviser
-        </h2>
+        <Reveal>
+          <h2 style={{
+            fontFamily: 'var(--font-head)', fontSize: 'clamp(1.2rem,3vw,1.6rem)',
+            fontWeight: 800, color: 'var(--white)', textAlign: 'center', marginBottom: '2rem',
+          }}>
+            Tout ce dont vous avez besoin pour réviser
+          </h2>
+        </Reveal>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           gap: '1rem',
         }}>
-          {features.map(f => (
-            <div key={f.title}
-              style={{
-                background: 'var(--bg2)', border: '1px solid var(--border)',
-                borderRadius: 16, padding: '1.5rem',
-                transition: 'border-color .2s, transform .2s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)';  e.currentTarget.style.transform = 'none' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '.75rem' }}>
-                <span style={{ fontSize: '2rem' }}>{f.icon}</span>
-                <span style={{
-                  fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600,
-                  background: f.tagBg, color: f.tagColor,
-                }}>
-                  {f.tag}
-                </span>
+          {features.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 3) * 100}>
+              <div
+                style={{
+                  background: 'var(--bg2)', border: '1px solid var(--border)',
+                  borderRadius: 16, padding: '1.5rem',
+                  transition: 'border-color .2s, transform .2s, box-shadow .2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,.25)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)';  e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '.75rem' }}>
+                  <f.icon size={26} color="var(--muted)" />
+                  <span style={{
+                    fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600,
+                    background: f.tagBg, color: f.tagColor,
+                  }}>
+                    {f.tag}
+                  </span>
+                </div>
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700, marginBottom: '.4rem', color: 'var(--white)' }}>{f.title}</h3>
+                <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.65 }}>{f.desc}</p>
               </div>
-              <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700, marginBottom: '.4rem', color: 'var(--white)' }}>{f.title}</h3>
-              <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.65 }}>{f.desc}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
 
       {/* ── CTA final ─────────────────────────────────────────────────── */}
-      <div style={{
-        maxWidth: 680, margin: '0 auto 4rem', padding: '2.5rem 2rem',
-        background: 'linear-gradient(135deg, #12101e, #1a1033)',
-        border: '1px solid #3d2b6b', borderRadius: 20, textAlign: 'center',
-      }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '.75rem' }}>🎯</div>
-        <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', fontWeight: 800, color: 'var(--white)', marginBottom: '.5rem' }}>
-          Prêt à améliorer vos notes ?
-        </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: '1.75rem', lineHeight: 1.6 }}>
-          Commencez gratuitement — aucune carte de crédit requise.
-        </p>
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={() => onNavigate('upload')} style={{
-            padding: '13px 32px', borderRadius: 10, fontSize: 15, fontWeight: 700,
-            background: 'var(--purple)', border: 'none', color: '#fff',
-            fontFamily: 'var(--font-body)', cursor: 'pointer',
-          }}>
-            Générer mon premier quiz
-          </button>
-          <button onClick={() => onNavigate('pricing')} style={{
-            padding: '13px 24px', borderRadius: 10, fontSize: 14, fontWeight: 500,
-            background: 'transparent', border: '1px solid #4a3080', color: '#a78bfa',
-            fontFamily: 'var(--font-body)', cursor: 'pointer',
-          }}>
-            Voir les plans
-          </button>
+      <Reveal>
+        <div style={{
+          maxWidth: 680, margin: '0 auto 4rem', padding: '2.5rem 2rem',
+          background: 'linear-gradient(135deg, #12101e, #1a1033)',
+          border: '1px solid #3d2b6b', borderRadius: 20, textAlign: 'center',
+        }}>
+          <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', fontWeight: 800, color: 'var(--white)', marginBottom: '.5rem' }}>
+            Prêt à améliorer vos notes ?
+          </h2>
+          <p style={{ color: 'var(--muted)', marginBottom: '1.75rem', lineHeight: 1.6 }}>
+            Commencez gratuitement — aucune carte de crédit requise.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => onNavigate('upload')} style={{
+              padding: '13px 32px', borderRadius: 10, fontSize: 15, fontWeight: 700,
+              background: 'var(--purple)', border: 'none', color: '#fff',
+              fontFamily: 'var(--font-body)', cursor: 'pointer',
+              transition: 'transform .2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none' }}
+            >
+              Générer mon premier quiz
+            </button>
+            <button onClick={() => onNavigate('pricing')} style={{
+              padding: '13px 24px', borderRadius: 10, fontSize: 14, fontWeight: 500,
+              background: 'transparent', border: '1px solid #4a3080', color: '#a78bfa',
+              fontFamily: 'var(--font-body)', cursor: 'pointer',
+            }}>
+              Voir les plans
+            </button>
+          </div>
         </div>
-      </div>
+      </Reveal>
     </div>
   )
 }

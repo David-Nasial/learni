@@ -1,16 +1,20 @@
 // ─── Page Résultats ───────────────────────────────────────────────────────────
-import type { QuizSession, Page } from '../types'
+import type { QuizSession, Page, WrittenGrade } from '../types'
 
 interface Props {
   session: QuizSession
-  answers: (number | null)[]
+  answers: (number | string | null)[]
+  writtenGrading: Record<number, WrittenGrade>
   onNavigate: (page: Page) => void
   onRestart: () => void
   onUpgrade: () => void
 }
 
-export function ResultsPage({ session, answers, onNavigate, onRestart, onUpgrade }: Props) {
-  const correct = answers.filter((a, i) => a === session.questions[i].answerIndex).length
+export function ResultsPage({ session, answers, writtenGrading, onNavigate, onRestart, onUpgrade }: Props) {
+  const isCorrect = (q: QuizSession['questions'][number], i: number) =>
+    q.type === 'mcq' ? answers[i] === q.answerIndex : writtenGrading[i]?.isCorrect === true
+
+  const correct = session.questions.filter((q, i) => isCorrect(q, i)).length
   const total = session.questions.length
   const pct = Math.round((correct / total) * 100)
 
@@ -69,11 +73,23 @@ export function ResultsPage({ session, answers, onNavigate, onRestart, onUpgrade
         }}>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: '.75rem' }}>❌ Questions manquées :</p>
           {session.questions.map((q, i) => {
-            if (answers[i] === q.answerIndex) return null
+            if (isCorrect(q, i)) return null
             return (
               <div key={q.id} style={{ marginBottom: '.75rem', paddingBottom: '.75rem', borderBottom: '1px solid var(--border)' }}>
                 <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 3 }}>{q.question}</p>
-                <p style={{ fontSize: 12, color: 'var(--green)' }}>✓ {q.choices[q.answerIndex]}</p>
+                {q.type === 'mcq' ? (
+                  <p style={{ fontSize: 12, color: 'var(--green)' }}>✓ {q.choices[q.answerIndex]}</p>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>
+                      Ta réponse : {typeof answers[i] === 'string' && answers[i] ? answers[i] as string : '(vide)'}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--green)', marginBottom: 2 }}>✓ {q.modelAnswer}</p>
+                    {writtenGrading[i]?.feedback && (
+                      <p style={{ fontSize: 12, color: '#a78bfa' }}>🤖 {writtenGrading[i].feedback}</p>
+                    )}
+                  </>
+                )}
               </div>
             )
           })}

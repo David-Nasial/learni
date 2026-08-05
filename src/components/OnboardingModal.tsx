@@ -199,7 +199,7 @@ export function OnboardingModal({ type, onClose, onNavigate }: Props) {
       padding: '1.5rem',
     }}>
       <div style={{
-        background: 'var(--bg2)', border: '1px solid #3d2b6b',
+        background: 'var(--bg2)', border: '1px solid #4a3080',
         borderRadius: 24, width: '100%', maxWidth: 480,
         padding: '2.5rem 2rem 2rem',
         position: 'relative', overflow: 'hidden',

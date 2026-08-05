@@ -12,7 +12,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { subject, level, action } = await req.json()
+    const { subject, level, action, documentText } = await req.json()
 
     // Filtrage contenu inapproprié
     const subjectLower = subject?.toLowerCase() ?? ''
@@ -50,6 +50,54 @@ Règles :
 - Chaque module : 2-4 leçons
 - Chaque leçon : contenu clair + un exercice pratique
 - Progressif : du plus simple au plus complexe
+
+Réponds UNIQUEMENT en JSON :
+{
+  "title": "Titre du cours",
+  "description": "Description courte du cours (2 phrases)",
+  "modules": [
+    {
+      "title": "Titre du module",
+      "description": "Ce que l'élève va apprendre",
+      "order_num": 1,
+      "lessons": [
+        {
+          "title": "Titre de la leçon",
+          "content": "Contenu pédagogique (2-3 paragraphes max, concis)",
+          "exercise": "Exercice pratique concret à réaliser",
+          "order_num": 1
+        }
+      ]
+    }
+  ]
+}`
+      const r = await callClaude(prompt, 8000)
+      return new Response(r, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Action 3 : structurer un cours à partir d'un document téléversé (PDF/Word)
+    if (action === 'from_document') {
+      if (!documentText || !documentText.trim()) throw new Error('Document vide ou illisible.')
+
+      const docLower = documentText.toLowerCase()
+      if (FORBIDDEN.some(w => docLower.includes(w))) {
+        throw new Error('Ce document contient du contenu non disponible sur LearnI.')
+      }
+
+      const prompt = `Tu es un expert pédagogue. Voici le contenu d'un cours fourni par l'utilisateur (extrait d'un document PDF ou Word) :
+---
+${documentText.slice(0, 15000)}
+---
+
+Structure ce contenu en un cours complet, organisé comme TryHackMe : modules progressifs avec leçons théoriques et exercices pratiques.
+
+Règles :
+- Reste fidèle au contenu fourni — n'invente pas de nouvelles connaissances hors du document, mais tu peux reformuler, réorganiser et ajouter des exercices pratiques basés dessus
+- Entre 4 et 6 modules
+- Chaque module : 2-4 leçons
+- Chaque leçon : contenu clair + un exercice pratique
+- Progressif : du plus simple au plus complexe
+- Déduis un titre de cours pertinent à partir du contenu
 
 Réponds UNIQUEMENT en JSON :
 {

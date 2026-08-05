@@ -26,20 +26,19 @@ export function Navbar({ onMenuClick, plan, user, onUpgradeClick, onLoginClick, 
         <button onClick={onMenuClick} style={{ background: 'none', border: 'none', color: 'var(--text)', padding: 6, borderRadius: 6, display: 'flex' }}>
           <Menu size={22} />
         </button>
-        <span style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--white)', letterSpacing: '-0.02em' }}>LearnI</span>
+        <span style={{
+          fontFamily: 'var(--font-logo)', fontSize: '2.4rem', fontWeight: 400,
+          color: 'var(--white)', lineHeight: 1,
+          WebkitTextStroke: '0.25px var(--white)',
+        }}>LearnI</span>
       </div>
 
       <div style={{ display: 'flex', gap: '.6rem', alignItems: 'center' }}>
         {user ? (
           <>
-            {plan === 'free' && (
-              <button onClick={onUpgradeClick} style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'var(--red)', border: 'none', color: '#fff', fontFamily: 'var(--font-body)' }}>
-                ✨ Passer Pro
-              </button>
-            )}
             {plan === 'pro' && (
               <div style={{ padding: '5px 12px', borderRadius: 20, background: '#2d1b69', border: '1px solid #4a3080', color: '#a78bfa', fontSize: 12, fontWeight: 600 }}>
-                ✨ Pro
+                Pro
               </div>
             )}
             <button onClick={onProfileClick} title="Mon profil" style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontFamily: 'var(--font-body)' }}>

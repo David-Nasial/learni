@@ -18,6 +18,7 @@
   --white:    #ffffff;
   --font-head: 'Sora', sans-serif;
   --font-body: 'DM Sans', sans-serif;
+  --font-logo: 'Miss Fajardose', cursive;
   --radius:   10px;
   --radius-lg:16px;
 }
@@ -47,5 +48,24 @@ html, body, #root {
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ─── Animations page d'accueil ────────────────────────────────────────────── */
+@keyframes heroUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% center; }
+  50%      { background-position: 100% center; }
+}
+
 button { cursor: pointer; font-family: var(--font-body); }
 a { color: inherit; text-decoration: none; }
+
+/* ─── Mon Cartable — mise en page 70/30 ────────────────────────────────────── */
+.cartable-split { display: flex; gap: 1.5rem; align-items: flex-start; }
+.cartable-split-left  { flex: 0 0 68%; min-width: 0; }
+.cartable-split-right { flex: 0 0 30%; min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+@media (max-width: 860px) {
+  .cartable-split { flex-direction: column; }
+  .cartable-split-left, .cartable-split-right { flex: 1 1 100%; }
+}

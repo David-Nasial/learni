@@ -62,6 +62,10 @@ export interface Profile {
   class_code?: string
   stripe_customer_id?: string
   stripe_subscription_id?: string
+  /** Plan réellement payé — présent seulement quand différent de `plan` (bascule Autodidacte ↔ Pro active). */
+  billed_plan?: 'free' | 'starter' | 'pro' | 'autodidacte' | 'teacher'
+  /** Valeur brute de la bascule, réservée aux abonnés Autodidacte. */
+  plan_override?: 'pro' | null
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
@@ -71,13 +75,29 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     .eq('id', userId)
     .single()
   if (error) return null
-  return data as Profile
+
+  const raw = data as Profile
+  // Un abonné Autodidacte qui a activé la bascule reçoit l'accès Pro (dont Mon
+  // Cartable) sans frais, tant qu'il n'est pas rebasculé — transparent pour le
+  // reste de l'app puisque tout le monde lit `profile.plan`.
+  if (raw.plan === 'autodidacte' && raw.plan_override === 'pro') {
+    return { ...raw, plan: 'pro', billed_plan: 'autodidacte' }
+  }
+  return raw
 }
 
 export async function updateProfile(userId: string, updates: Partial<Profile>) {
   const { error } = await supabase
     .from('profiles')
     .update(updates)
+    .eq('id', userId)
+  if (error) throw new Error(error.message)
+}
+
+export async function setAutodidacteProOverride(userId: string, active: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ plan_override: active ? 'pro' : null })
     .eq('id', userId)
   if (error) throw new Error(error.message)
 }
@@ -496,11 +516,10 @@ export async function getAssessmentQuestions(subject: string): Promise<{ questio
   return { questions }
 }
 
-export async function generateAndSaveCourse(
-  userId: string,
-  subject: string,
-  level: 'debutant' | 'intermediaire' | 'expert'
-): Promise<UserCourse> {
+async function callGenerateCourse(body: Record<string, unknown>): Promise<{
+  title: string; description: string
+  modules: { title: string; description: string; order_num: number; lessons: Record<string, unknown>[] }[]
+}> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
 
@@ -513,12 +532,20 @@ export async function generateAndSaveCourse(
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ subject, level, action: 'generate' }),
+      body: JSON.stringify(body),
     }
   )
   const data = await response.json()
   if (data.error) throw new Error(data.error)
+  return data
+}
 
+async function saveGeneratedCourse(
+  userId: string,
+  subject: string,
+  level: 'debutant' | 'intermediaire' | 'expert',
+  data: { title: string; description: string; modules: { title: string; description: string; order_num: number; lessons: Record<string, unknown>[] }[] }
+): Promise<UserCourse> {
   // Sauvegarder le cours
   const { data: course, error: courseError } = await supabase
     .from('user_courses')
@@ -545,6 +572,25 @@ export async function generateAndSaveCourse(
   }
 
   return course as UserCourse
+}
+
+export async function generateAndSaveCourse(
+  userId: string,
+  subject: string,
+  level: 'debutant' | 'intermediaire' | 'expert'
+): Promise<UserCourse> {
+  const data = await callGenerateCourse({ subject, level, action: 'generate' })
+  return saveGeneratedCourse(userId, subject, level, data)
+}
+
+export async function generateAndSaveCourseFromDocument(
+  userId: string,
+  documentText: string,
+  subject: string
+): Promise<UserCourse> {
+  const data = await callGenerateCourse({ documentText, subject, action: 'from_document' })
+  // Pas d'évaluation de niveau pour un cours téléversé — niveau neutre par défaut
+  return saveGeneratedCourse(userId, subject || data.title, 'intermediaire', data)
 }
 
 export async function getUserCourses(userId: string): Promise<UserCourse[]> {
@@ -783,6 +829,8 @@ export async function deleteFlashcardSet(setId: string): Promise<void> {
 
 // ─── Mon Cartable ─────────────────────────────────────────────────────────────
 
+export type CartableUnitLabel = 'UA' | 'Chapitre'
+
 export interface Cahier {
   id: string
   name: string
@@ -790,6 +838,9 @@ export interface Cahier {
   created_at: string
   updated_at: string
   uas?: UA[]
+  summary_points?: string[] | null
+  summary_generated_at?: string | null
+  unit_label: CartableUnitLabel
 }
 
 export interface UA {
@@ -799,6 +850,10 @@ export interface UA {
   label: string
   created_at: string
   documents?: CartableDocument[]
+  summary_points?: string[] | null
+  rewritten_content?: string | null
+  rewritten_comments?: Record<string, string> | null
+  content_generated_at?: string | null
 }
 
 export interface CartableDocument {
@@ -836,10 +891,12 @@ export async function getCahiers(userId: string): Promise<Cahier[]> {
   return (data ?? []) as Cahier[]
 }
 
-export async function createCahier(userId: string, name: string, courseCode: string): Promise<Cahier> {
+export async function createCahier(
+  userId: string, name: string, courseCode: string, unitLabel: CartableUnitLabel = 'UA'
+): Promise<Cahier> {
   const { data, error } = await supabase
     .from('cartable_cahiers')
-    .insert({ user_id: userId, name, course_code: courseCode })
+    .insert({ user_id: userId, name, course_code: courseCode, unit_label: unitLabel })
     .select().single()
   if (error) throw new Error(error.message)
   return data as Cahier
@@ -909,7 +966,8 @@ export async function generateRevision(
   uas: { number: number; label: string; content: string }[],
   numQuestions: number,
   language: 'fr' | 'en',
-  existingQuestions?: { question: string }[]
+  existingQuestions?: { question: string }[],
+  unitLabel: CartableUnitLabel = 'UA'
 ): Promise<RevisionResult> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -923,13 +981,188 @@ export async function generateRevision(
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ mode, cahierName, uas, numQuestions, language, existingQuestions }),
+      body: JSON.stringify({ mode, cahierName, uas, numQuestions, language, existingQuestions, unitLabel }),
     }
   )
   if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`)
   const data = await response.json()
   if (data.error) throw new Error(data.error)
   return data as RevisionResult
+}
+
+// ─── Cartable — résumés & cours réécrit (générés à la demande, mis en cache) ──
+
+async function callCartableEnrich(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cartable-enrich`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    }
+  )
+  if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`)
+  const data = await response.json()
+  if (data.error) throw new Error(data.error)
+  return data
+}
+
+export async function generateCahierSummary(
+  cahierId: string, title: string, content: string, language: 'fr' | 'en'
+): Promise<string[]> {
+  const data = await callCartableEnrich({ action: 'summary', title, content, language })
+  const points = (Array.isArray(data.points) ? data.points : []) as string[]
+  await supabase.from('cartable_cahiers')
+    .update({ summary_points: points, summary_generated_at: new Date().toISOString() })
+    .eq('id', cahierId)
+  return points
+}
+
+export async function generateUASummary(
+  uaId: string, title: string, content: string, language: 'fr' | 'en'
+): Promise<string[]> {
+  const data = await callCartableEnrich({ action: 'summary', title, content, language })
+  const points = (Array.isArray(data.points) ? data.points : []) as string[]
+  await supabase.from('cartable_uas').update({ summary_points: points }).eq('id', uaId)
+  return points
+}
+
+export async function generateUARewrite(
+  uaId: string, title: string, content: string, language: 'fr' | 'en'
+): Promise<{ rewritten: string; comments: Record<string, string> }> {
+  const data = await callCartableEnrich({ action: 'rewrite', title, content, language })
+  const rewritten = (data.rewritten as string) ?? ''
+  const comments  = (data.comments as Record<string, string>) ?? {}
+  await supabase.from('cartable_uas')
+    .update({ rewritten_content: rewritten, rewritten_comments: comments, content_generated_at: new Date().toISOString() })
+    .eq('id', uaId)
+  return { rewritten, comments }
+}
+
+// ─── Aide aux devoirs (tuteur IA) ─────────────────────────────────────────────
+
+export interface HomeworkSession {
+  id: string
+  user_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export interface HomeworkMessage {
+  id: string
+  session_id: string
+  role: 'user' | 'assistant'
+  content: string
+  attachment_name: string | null
+  created_at: string
+}
+
+export async function getHomeworkSessions(userId: string): Promise<HomeworkSession[]> {
+  const { data, error } = await supabase
+    .from('homework_sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as HomeworkSession[]
+}
+
+export async function createHomeworkSession(userId: string, title = 'Nouvelle conversation'): Promise<HomeworkSession> {
+  const { data, error } = await supabase
+    .from('homework_sessions')
+    .insert({ user_id: userId, title })
+    .select().single()
+  if (error) throw new Error(error.message)
+  return data as HomeworkSession
+}
+
+export async function renameHomeworkSession(sessionId: string, title: string): Promise<void> {
+  const { error } = await supabase
+    .from('homework_sessions')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+  if (error) throw new Error(error.message)
+}
+
+export async function touchHomeworkSession(sessionId: string): Promise<void> {
+  await supabase.from('homework_sessions').update({ updated_at: new Date().toISOString() }).eq('id', sessionId)
+}
+
+export async function deleteHomeworkSession(sessionId: string): Promise<void> {
+  const { error } = await supabase.from('homework_sessions').delete().eq('id', sessionId)
+  if (error) throw new Error(error.message)
+}
+
+export async function getHomeworkMessages(sessionId: string): Promise<HomeworkMessage[]> {
+  const { data, error } = await supabase
+    .from('homework_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as HomeworkMessage[]
+}
+
+export async function addHomeworkMessage(
+  sessionId: string, role: 'user' | 'assistant', content: string, attachmentName?: string
+): Promise<HomeworkMessage> {
+  const { data, error } = await supabase
+    .from('homework_messages')
+    .insert({ session_id: sessionId, role, content, attachment_name: attachmentName ?? null })
+    .select().single()
+  if (error) throw new Error(error.message)
+  return data as HomeworkMessage
+}
+
+// ─── Mon Cartable — notes de l'élève (page de lecture) ────────────────────────
+
+export interface UANote {
+  id: string
+  ua_id: string
+  user_id: string
+  kind: 'general' | 'inline'
+  content: string
+  anchor_text: string | null
+  paragraph_index: number | null
+  created_at: string
+}
+
+export async function getUANotes(uaId: string): Promise<UANote[]> {
+  const { data, error } = await supabase
+    .from('cartable_ua_notes')
+    .select('*')
+    .eq('ua_id', uaId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as UANote[]
+}
+
+export async function addUANote(
+  uaId: string, userId: string, kind: 'general' | 'inline', content: string,
+  anchorText?: string, paragraphIndex?: number
+): Promise<UANote> {
+  const { data, error } = await supabase
+    .from('cartable_ua_notes')
+    .insert({
+      ua_id: uaId, user_id: userId, kind, content,
+      anchor_text: anchorText ?? null, paragraph_index: paragraphIndex ?? null,
+    })
+    .select().single()
+  if (error) throw new Error(error.message)
+  return data as UANote
+}
+
+export async function deleteUANote(noteId: string): Promise<void> {
+  const { error } = await supabase.from('cartable_ua_notes').delete().eq('id', noteId)
+  if (error) throw new Error(error.message)
 }
 
 // ─── Agenda Events ────────────────────────────────────────────────────────────

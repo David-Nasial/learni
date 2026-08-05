@@ -46,8 +46,8 @@ function Card({ card, index, total }: { card: Flashcard; index: number; total: n
           {/* Recto */}
           <div style={{
             position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden',
-            background: 'linear-gradient(135deg, #12101e, #1a1033)',
-            border: '1px solid #3d2b6b', borderRadius: 20,
+            background: 'linear-gradient(135deg, #1a1033, #1a1033)',
+            border: '1px solid #4a3080', borderRadius: 20,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem',
           }}>
             <div style={{ fontSize: 11, color: '#a78bfa', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '1rem' }}>
@@ -288,7 +288,7 @@ export function FlashcardsPage() {
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '10px 20px', borderRadius: 10,
-                background: 'var(--bg2)', border: '1px solid #3d2b6b',
+                background: 'var(--bg2)', border: '1px solid #4a3080',
                 color: '#a78bfa', cursor: regenerating ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
               }}
             >
@@ -388,7 +388,7 @@ export function FlashcardsPage() {
                   <div style={{
                     width: 44, height: 44, borderRadius: 12, flexShrink: 0,
                     background: 'linear-gradient(135deg, #2d1b69, #1a1033)',
-                    border: '1px solid #3d2b6b',
+                    border: '1px solid #4a3080',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem',
                   }}>
                     🃏
@@ -476,7 +476,7 @@ export function FlashcardsPage() {
           style={{
             border: '2px dashed var(--border)', borderRadius: 14,
             padding: '2.5rem 1.5rem', textAlign: 'center', cursor: 'pointer',
-            background: file ? '#12101e' : 'transparent',
+            background: file ? '#1a1033' : 'transparent',
             marginBottom: '1.5rem', transition: 'border-color .2s',
           }}
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--purple)')}

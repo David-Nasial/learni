@@ -1,7 +1,7 @@
 // ─── Sidebar — LearnI ─────────────────────────────────────────────────────────
 import { Home, FileText, BarChart2, Layers, Bot, DollarSign,
          GraduationCap, User2, X, RefreshCw, Users, Calendar,
-         BookOpen, Briefcase, Lock } from 'lucide-react'
+         BookOpen, Briefcase, Lock, PenTool } from 'lucide-react'
 import type { Page, Plan, AppMode } from '../types'
 
 interface Props {
@@ -99,6 +99,17 @@ const NAV_ITEMS: NavItem[] = [
     badge: 'PRO',
     access: (plan, role) => {
       if (role === 'superadmin') return 'show'
+      if (['pro', 'teacher'].includes(plan)) return 'show'
+      if (plan === 'free') return 'paywall'
+      return 'hidden'
+    },
+  },
+  {
+    icon: <PenTool size={17} />, label: 'Aide aux devoirs', page: 'homework',
+    badge: 'PRO',
+    access: (plan, role) => {
+      if (role === 'superadmin') return 'show'
+      // Pro pour l'instant — ajoute 'starter' ici (et dans HomeworkPage.tsx) si tu décides de l'inclure
       if (['pro', 'teacher'].includes(plan)) return 'show'
       if (plan === 'free') return 'paywall'
       return 'hidden'

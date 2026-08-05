@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { mode, cahierName, uas, numQuestions, language, existingQuestions } = await req.json()
+    const { mode, cahierName, uas, numQuestions, language, existingQuestions, unitLabel } = await req.json()
     // uas = [{ number, label, content }]
 
     if (!uas || uas.length === 0) {
@@ -30,10 +30,12 @@ serve(async (req) => {
     const lang   = language === 'en' ? 'English' : 'français'
     const num    = Math.min(numQuestions ?? 10, 20)
     const isFinal = mode === 'final'
+    const unit   = unitLabel === 'Chapitre' ? 'Chapitre' : 'UA'
+    const unitTag = (n: number) => unit === 'Chapitre' ? `Chapitre ${n}` : `UA${n}`
 
-    // Construire le texte source par UA
+    // Construire le texte source par unité
     const uaBlocks = uas.map((ua: { number: number; label: string; content: string }) =>
-      `=== UA${ua.number}${ua.label ? ` — ${ua.label}` : ''} ===\n${ua.content.slice(0, 4000)}`
+      `=== ${unitTag(ua.number)}${ua.label ? ` — ${ua.label}` : ''} ===\n${ua.content.slice(0, 4000)}`
     ).join('\n\n')
 
     const alreadySeen = Array.isArray(existingQuestions) && existingQuestions.length > 0
@@ -41,8 +43,8 @@ serve(async (req) => {
       : ''
 
     const finalInstructions = isFinal
-      ? `C'est un EXAMEN FINAL — couvre obligatoirement TOUTES les UAs de façon équilibrée. Chaque UA doit avoir au moins une question.`
-      : `C'est une révision de UA${uas[0].number} — toutes les questions doivent porter sur cette UA uniquement.`
+      ? `C'est un EXAMEN FINAL — couvre obligatoirement TOUS les ${unit === 'Chapitre' ? 'chapitres' : 'UAs'} de façon équilibrée. Chaque ${unit} doit avoir au moins une question.`
+      : `C'est une révision de ${unitTag(uas[0].number)} — toutes les questions doivent porter sur cette unité uniquement.`
 
     const userPrompt = `
 Tu es un professeur expert. Génère exactement ${num} exercices de révision en ${lang} pour le cours "${cahierName}".
@@ -61,7 +63,7 @@ Pour chaque exercice, fournis :
 3. Une explication TRÈS DÉTAILLÉE de la bonne réponse (2-4 phrases qui expliquent POURQUOI c'est correct, avec le contexte du cours)
 4. Pour chaque mauvais choix : une phrase qui explique POURQUOI c'est incorrect
 5. Un ou deux "points d'attention" : erreurs fréquentes ou subtilités à ne pas oublier sur ce sujet
-6. Le tag UA concernée
+6. Le tag ${unit} concernée (ex: "${unitTag(uas[0].number)}")
 
 Retourne un JSON avec cette structure EXACTE :
 {
@@ -81,7 +83,7 @@ Retourne un JSON avec cette structure EXACTE :
         "3": "Pourquoi le choix D est incorrect..."
       },
       "attentionPoints": ["À ne pas oublier : ...", "Attention à ne pas confondre avec..."],
-      "uaTag": "UA1"
+      "uaTag": "${unitTag(uas[0].number)}"
     }
   ]
 }

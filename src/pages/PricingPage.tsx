@@ -1,6 +1,6 @@
 import { useState } from 'react'
 // ─── Page Tarification — LearnI ───────────────────────────────────────────────
-import { Check, X } from 'lucide-react'
+import { Check, X, Brain, Bot, Calendar, BookOpen, Repeat } from 'lucide-react'
 import { startCheckout, type StripePlan } from '../utils/stripe'
 import { useAuth } from '../hooks/useAuth'
 import type { AppMode } from '../types'
@@ -19,10 +19,12 @@ const planFree = [
   { label: 'Import PDF, TXT, MD',                ok: true  },
   { label: 'Historique des résultats',           ok: true  },
   { label: '10 ou 20 questions par quiz',        ok: true  },
+  { label: 'Import multi-documents (jusqu\'à 5)',ok: false },
+  { label: 'Réponses écrites corrigées par IA',  ok: false },
   { label: 'Flashcards IA',                      ok: false },
   { label: 'Explications détaillées sur échecs', ok: false },
   { label: 'Plan d\'étude IA',                   ok: false },
-  { label: 'Mon Cartable (UAs + révision)',       ok: false },
+  { label: 'Mon Cartable (UAs, cours complet, révision, audio)', ok: false },
   { label: 'Tuteur IA conversationnel',           ok: false },
   { label: 'Génération de cours complets',        ok: false },
 ]
@@ -31,11 +33,13 @@ const planStarter = [
   { label: '5 quiz par jour',                    ok: true  },
   { label: 'Import PDF, TXT, MD',                ok: true  },
   { label: 'Historique complet cloud',           ok: true  },
-  { label: '10 ou 20 questions par quiz',        ok: true  },
+  { label: '10, 20 ou 35 questions par quiz',    ok: true  },
+  { label: 'Import multi-documents (jusqu\'à 5)',ok: true  },
+  { label: 'Réponses écrites corrigées par IA',  ok: true  },
   { label: 'Flashcards IA (sauvegardées)',        ok: true  },
   { label: 'Explications détaillées sur échecs', ok: true  },
   { label: 'Plan d\'étude IA',                   ok: false },
-  { label: 'Mon Cartable (UAs + révision)',       ok: false },
+  { label: 'Mon Cartable (UAs, cours complet, révision, audio)', ok: false },
   { label: 'Tuteur IA conversationnel',           ok: false },
   { label: 'Génération de cours complets',        ok: false },
 ]
@@ -44,11 +48,13 @@ const planPro = [
   { label: 'Quiz illimités',                     ok: true  },
   { label: 'Import PDF, TXT, MD illimité',       ok: true  },
   { label: 'Historique complet cloud',           ok: true  },
-  { label: '10 ou 20 questions par quiz',        ok: true  },
+  { label: '10, 20 ou 35 questions par quiz',    ok: true  },
+  { label: 'Import multi-documents (jusqu\'à 5)',ok: true  },
+  { label: 'Réponses écrites corrigées par IA',  ok: true  },
   { label: 'Flashcards IA (sauvegardées)',        ok: true  },
   { label: 'Explications détaillées sur échecs', ok: true  },
   { label: 'Plan d\'étude IA',                   ok: true  },
-  { label: 'Mon Cartable (UAs + révision examen)',ok: true  },
+  { label: 'Mon Cartable (UAs, cours complet, révision, audio)', ok: true  },
   { label: 'Tuteur IA conversationnel',           ok: false },
   { label: 'Génération de cours complets',        ok: false },
 ]
@@ -56,23 +62,30 @@ const planPro = [
 const planAutodidacte = [
   { label: 'Quiz illimités',                     ok: true  },
   { label: 'Import PDF, TXT, MD illimité',       ok: true  },
+  { label: '10, 20 ou 35 questions par quiz',    ok: true  },
+  { label: 'Import multi-documents (jusqu\'à 5)',ok: true  },
+  { label: 'Réponses écrites corrigées par IA',  ok: true  },
   { label: 'Flashcards IA (sauvegardées)',        ok: true  },
   { label: 'Explications détaillées sur échecs', ok: true  },
   { label: 'Plan d\'étude IA',                   ok: true  },
-  { label: 'Mon Cartable (UAs + révision examen)',ok: false },
+  { label: 'Mon Cartable (UAs, cours complet, révision, audio)', ok: false },
+  { label: 'Bascule vers Mon Cartable (Pro) sans frais', ok: true },
   { label: 'Tuteur IA (débutant / prof / exam)', ok: true  },
   { label: 'Tuteur IA dans les cours (flottant)',ok: true  },
-  { label: 'Génération de cours complets IA',    ok: true  },
+  { label: 'Cours : génération IA ou import PDF/Word', ok: true },
   { label: 'Communautés & défis d\'apprentissage',ok: true },
 ]
 
 const planTeacher = [
   { label: 'Quiz illimités',                     ok: true  },
   { label: 'Import PDF, TXT, MD illimité',       ok: true  },
+  { label: '10, 20 ou 35 questions par quiz',    ok: true  },
+  { label: 'Import multi-documents (jusqu\'à 5)',ok: true  },
+  { label: 'Réponses écrites corrigées par IA',  ok: true  },
   { label: 'Flashcards IA (sauvegardées)',        ok: true  },
   { label: 'Explications détaillées sur échecs', ok: true  },
   { label: 'Plan d\'étude IA',                   ok: true  },
-  { label: 'Mon Cartable (UAs + révision examen)',ok: true  },
+  { label: 'Mon Cartable (UAs, cours complet, révision, audio)', ok: true  },
   { label: 'Tableau de bord enseignant',         ok: true  },
   { label: 'Gestion de classes illimitées',      ok: true  },
   { label: 'Suivi individuel par élève',         ok: true  },
@@ -110,7 +123,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
         </p>
         {isSchool && (
           <div style={{ display: 'inline-block', marginTop: '.75rem', padding: '5px 14px', borderRadius: 20, background: '#1a1033', border: '1px solid #4a3080', fontSize: 12, color: '#a78bfa' }}>
-            🏫 Mode Établissement scolaire — plans surlignés = recommandés pour vous
+            Mode Établissement scolaire — plans surlignés = recommandés pour vous
           </div>
         )}
       </div>
@@ -147,7 +160,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
         {/* STARTER — usage personnel seulement */}
         {!isSchool && (
           <PlanCard
-            badge="💡 Bon rapport qualité/prix"
+            badge="Bon rapport qualité/prix"
             title="Starter"
             price="9.99$" period="/mois"
             desc="Pour les étudiants qui veulent plus de flexibilité."
@@ -162,7 +175,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
 
         {/* PRO — toujours visible, recommandé pour école */}
         <PlanCard
-          badge={isSchool ? '✅ Recommandé élèves' : '⭐ Le plus populaire'}
+          badge={isSchool ? 'Recommandé élèves' : 'Le plus populaire'}
           title="Pro"
           price="22.99$" period="/mois"
           desc={isSchool
@@ -179,7 +192,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
         {/* AUTODIDACTE — usage personnel seulement */}
         {!isSchool && (
           <PlanCard
-            badge="🧠 Ultra complet"
+            badge="Ultra complet"
             title="Autodidacte Complet"
             price="35.99$" period="/mois"
             desc="Pour apprendre n'importe quoi de façon autonome : tuteur IA, plan d'étude, génération de cours."
@@ -194,7 +207,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
 
         {/* ENSEIGNANT — toujours visible, recommandé pour école */}
         <PlanCard
-          badge={isSchool ? '✅ Recommandé profs & admin' : '🏫 Institutions'}
+          badge={isSchool ? 'Recommandé profs & admin' : 'Institutions'}
           title="Enseignant"
           price="35.99$" period="/mois"
           desc={isSchool
@@ -214,7 +227,7 @@ export function PricingPage({ appMode, onLogin }: Props) {
         <div style={{ marginTop: '3rem', background: 'linear-gradient(135deg,#0f1f2e,#0d2318)', border: '1px solid #1a4a3a', borderRadius: 16, padding: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2rem', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 220 }}>
-              <div style={{ fontSize: '2rem', marginBottom: '.5rem' }}>🧠</div>
+              <Brain size={28} color="#6ee7b7" style={{ marginBottom: '.5rem' }} />
               <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--white)', marginBottom: '.4rem' }}>
                 Autodidacte Complet — 35.99$/mois
               </h3>
@@ -222,23 +235,27 @@ export function PricingPage({ appMode, onLogin }: Props) {
                 La suite complète pour apprendre seul, efficacement, n'importe quel sujet.
               </p>
             </div>
-            <div style={{ flex: 2, minWidth: 280, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+            <div style={{ flex: 2, minWidth: 280, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
               {[
                 {
-                  icon: '🤖', title: 'Tuteur IA conversationnel',
+                  Icon: Bot, title: 'Tuteur IA conversationnel',
                   desc: 'Posez n\'importe quelle question. Le tuteur s\'adapte : mode prof strict, mode débutant, mode examen.',
                 },
                 {
-                  icon: '📅', title: 'Plan d\'étude intelligent',
+                  Icon: Calendar, title: 'Plan d\'étude intelligent',
                   desc: 'L\'IA crée un calendrier personnalisé avec objectifs, rappels et révisions espacées.',
                 },
                 {
-                  icon: '📚', title: 'Génération de cours',
-                  desc: 'Dites "Je veux apprendre Linux" — l\'IA génère modules, exercices, quiz et un parcours complet.',
+                  Icon: BookOpen, title: 'Cours : IA ou import',
+                  desc: 'Dites "Je veux apprendre Linux" et l\'IA génère le cours, ou importe directement ton PDF/Word existant.',
+                },
+                {
+                  Icon: Repeat, title: 'Bascule vers Pro sans frais',
+                  desc: 'Besoin de Mon Cartable ponctuellement ? Bascule vers l\'accès Pro en un clic, aussi souvent que tu veux, sans frais.',
                 },
               ].map(f => (
                 <div key={f.title} style={{ background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: '1rem' }}>
-                  <div style={{ fontSize: '1.4rem', marginBottom: '.4rem' }}>{f.icon}</div>
+                  <f.Icon size={20} color="#6ee7b7" style={{ marginBottom: '.5rem' }} />
                   <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '.85rem', color: '#fff', marginBottom: '.3rem' }}>{f.title}</h4>
                   <p style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.5 }}>{f.desc}</p>
                 </div>
@@ -278,28 +295,37 @@ export function PricingPage({ appMode, onLogin }: Props) {
             <tbody>
               {(isSchool ? [
                 ['Quiz par jour',              '2',       'Illimité',  'Illimité'],
+                ['Questions par quiz',         '10 ou 20','10, 20 ou 35', '10, 20 ou 35'],
+                ['Multi-documents (jusqu\'à 5)','❌',     '✅',        '✅'],
+                ['Réponses écrites (IA)',      '❌',      '✅',        '✅'],
                 ['Flashcards IA',              '❌',      '✅',        '✅'],
                 ['Explications sur échecs',    '❌',      'Détaillées','Détaillées'],
                 ['Plan d\'étude IA',           '❌',      '✅',        '✅'],
-                ['Mon Cartable + révision',    '❌',      '✅',        '✅'],
+                ['Mon Cartable + cours complet + audio','❌', '✅',    '✅'],
                 ['Gestion de classes',         '❌',      '❌',        '✅'],
                 ['Suivi élèves',               '❌',      '❌',        '✅'],
                 ['Code de classe',             '❌',      '❌',        '✅'],
               ] : [
                 ['Quiz par jour',              '2',       '5',         'Illimité',   'Illimité'],
+                ['Questions par quiz',         '10 ou 20','10, 20 ou 35','10, 20 ou 35','10, 20 ou 35'],
+                ['Multi-documents (jusqu\'à 5)','❌',     '✅',        '✅',         '✅'],
+                ['Réponses écrites (IA)',      '❌',      '✅',        '✅',         '✅'],
                 ['Flashcards IA',              '❌',      '✅',        '✅',         '✅'],
                 ['Explications sur échecs',    '❌',      'Détaillées','Détaillées', 'Détaillées'],
                 ['Plan d\'étude IA',           '❌',      '❌',        '✅',         '✅'],
-                ['Mon Cartable + révision',    '❌',      '❌',        '✅',         '❌'],
+                ['Mon Cartable + cours complet + audio','❌', '❌',    '✅',         '❌'],
+                ['Bascule Pro sans frais',     '❌',      '❌',        '❌',         '✅'],
                 ['Tuteur IA',                  '❌',      '❌',        '❌',         '✅'],
-                ['Génération de cours',        '❌',      '❌',        '❌',         '✅'],
+                ['Cours : IA ou import',       '❌',      '❌',        '❌',         '✅'],
                 ['Communautés',                '❌',      '❌',        '❌',         '✅'],
               ]).map((row, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.02)' }}>
                   <td style={{ padding: '9px 14px', color: 'var(--text)', fontWeight: 500 }}>{row[0]}</td>
                   {row.slice(1).map((val, j) => (
                     <td key={j} style={{ padding: '9px 14px', textAlign: 'center', color: val === '❌' ? '#444' : val === '✅' ? 'var(--green)' : 'var(--muted)' }}>
-                      {val}
+                      {val === '✅' ? <Check size={14} style={{ margin: '0 auto' }} />
+                        : val === '❌' ? <X size={14} style={{ margin: '0 auto' }} />
+                        : val}
                     </td>
                   ))}
                 </tr>

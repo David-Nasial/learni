@@ -17,7 +17,7 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfText, numQuestions, questionType, language, documentTitle } = await req.json()
+    const { pdfText, numQuestions, questionType, answerMode, language, documentTitle, teacherSpecs } = await req.json()
 
     if (!pdfText) {
       return new Response(JSON.stringify({ error: 'pdfText manquant' }), {
@@ -36,24 +36,70 @@ serve(async (req) => {
     const lang  = language === 'fr' ? 'français' : 'English'
     const type  = typeLabel[questionType] ?? typeLabel['all']
     const title = documentTitle ?? 'document'
+    const mixed = answerMode === 'mixed'
 
-    const userPrompt = `
+    const specsBlock = teacherSpecs?.trim() ? `
+Consignes données par le professeur pour cet examen — respecte-les en priorité (chapitres à cibler, sujets à exclure, contraintes de format, style de l'examen, etc.) :
+---
+${teacherSpecs.trim().slice(0, 3000)}
+---
+` : ''
+
+    const mcqSchema = `  {
+    "type": "mcq",
+    "question": "...",
+    "choices": ["Choix A", "Choix B", "Choix C", "Choix D"],
+    "answerIndex": 0,
+    "explanation": "Explication concise en 1-2 phrases.",
+    "topic": "Thème court"
+  }`
+
+    const writtenSchema = `  {
+    "type": "written",
+    "question": "...",
+    "choices": [],
+    "answerIndex": -1,
+    "modelAnswer": "Réponse modèle complète, 2-4 phrases.",
+    "keyPoints": ["Élément clé 1 attendu", "Élément clé 2 attendu"],
+    "explanation": "Explication concise en 1-2 phrases.",
+    "topic": "Thème court"
+  }`
+
+    const userPrompt = mixed ? `
+Génère exactement ${numQuestions} questions en ${lang} de type : ${type}, à partir du texte source ci-dessous.
+
+Ce quiz est en MODE MIXTE : pour chaque question, décide toi-même si elle convient mieux à un choix multiple (QCM) ou à une réponse écrite ouverte.
+- Utilise le QCM pour les faits précis, dates, définitions courtes, ou tout ce qui a une réponse unique et courte.
+- Utilise la réponse écrite pour les questions qui demandent d'expliquer un concept, de justifier un raisonnement, ou de reformuler dans ses propres mots.
+- Vise un mélange raisonnable des deux types (ni 100% QCM, ni 100% écrit), selon ce que le texte permet.
+
+Texte source (extrait du document "${title}") :
+---
+${pdfText.slice(0, 12000)}
+---
+${specsBlock}
+Retourne un JSON avec cette structure EXACTE (tableau de ${numQuestions} objets, chaque objet étant soit de type "mcq" soit de type "written") :
+[
+${mcqSchema},
+${writtenSchema}
+]
+
+Règles :
+- Pour "mcq" : 4 choix, UN seul correct, answerIndex = index (0-3) de la bonne réponse, mauvais choix plausibles
+- Pour "written" : choices = [], answerIndex = -1, modelAnswer = la réponse idéale complète, keyPoints = 2-4 éléments que la réponse de l'élève devrait couvrir pour être jugée correcte
+- Couvre différentes parties du texte
+- Réponds UNIQUEMENT en JSON valide, sans markdown
+`.trim() : `
 Génère exactement ${numQuestions} questions QCM en ${lang} de type : ${type}.
 
 Texte source (extrait du document "${title}") :
 ---
 ${pdfText.slice(0, 12000)}
 ---
-
+${specsBlock}
 Retourne un JSON avec cette structure EXACTE (tableau de ${numQuestions} objets) :
 [
-  {
-    "question": "...",
-    "choices": ["Choix A", "Choix B", "Choix C", "Choix D"],
-    "answerIndex": 0,
-    "explanation": "Explication concise en 1-2 phrases.",
-    "topic": "Thème court"
-  }
+${mcqSchema}
 ]
 
 Règles :
@@ -74,7 +120,7 @@ Règles :
       },
       body: JSON.stringify({
         model:      'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system:     'Tu es LearnI. Réponds UNIQUEMENT en JSON valide, sans texte avant ni après, sans balises markdown.',
         messages:   [{ role: 'user', content: userPrompt }],
       }),

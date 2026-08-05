@@ -7,6 +7,7 @@ import { Paywall }          from './components/Paywall'
 import { HomePage }         from './pages/HomePage'
 import { UploadPage }       from './pages/UploadPage'
 import { GeneratingPage }   from './pages/GeneratingPage'
+import { GradingPage }      from './pages/GradingPage'
 import { QuizPage }         from './pages/QuizPage'
 import { ResultsPage }      from './pages/ResultsPage'
 import { HistoryPage }      from './pages/HistoryPage'
@@ -19,13 +20,14 @@ import { CoursesPage }       from './pages/CoursesPage'
 import { CommunityPage }     from './pages/CommunityPage'
 import { FlashcardsPage }    from './pages/FlashcardsPage'
 import { CartablePage }      from './pages/CartablePage'
+import { HomeworkPage }      from './pages/HomeworkPage'
 import { StudentDashboard }   from './pages/StudentDashboard'
 import { OnboardingModal }    from './components/OnboardingModal'
 import { useLocalStorage }    from './hooks/useLocalStorage'
-import { signOut, saveResultToCloud } from './utils/supabase'
+import { signOut, saveResultToCloud, setAutodidacteProOverride } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
-  GenerateOptions, Question,
+  GenerateOptions, Question, WrittenGrade,
 } from './types'
 
 // ─── Wrapper racine avec AuthProvider ────────────────────────────────────────
@@ -99,7 +101,7 @@ function ModeSelector({ onSelect }: { onSelect: (m: AppMode) => void }) {
 
 // ─── App principale ───────────────────────────────────────────────────────────
 function AppInner() {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, refreshProfile } = useAuth()
 
   const [appMode, setAppMode]       = useLocalStorage<AppMode | null>('learni_mode', null)
   const [page, setPage]             = useState<Page>('home')
@@ -112,7 +114,8 @@ function AppInner() {
 
   const [generateOpts, setGenerateOpts] = useState<GenerateOptions | null>(null)
   const [session, setSession]           = useState<QuizSession | null>(null)
-  const [finalAnswers, setFinalAnswers] = useState<(number | null)[]>([])
+  const [finalAnswers, setFinalAnswers] = useState<(number | string | null)[]>([])
+  const [writtenGrading, setWrittenGrading] = useState<Record<number, WrittenGrade>>({})
   const [genError, setGenError]         = useState('')
 
   // Onboarding
@@ -190,11 +193,13 @@ function AppInner() {
     navigate('quiz')
   }
 
-  const handleFinish = async (answers: (number | null)[]) => {
+  const finalizeResult = async (answers: (number | string | null)[], graded: Record<number, WrittenGrade>) => {
     if (!session) return
-    setFinalAnswers(answers)
-    const correct = answers.filter((a, i) => a === session.questions[i].answerIndex).length
-    const score   = Math.round((correct / session.questions.length) * 100)
+    setWrittenGrading(graded)
+    const correct = session.questions.filter((q, i) =>
+      q.type === 'mcq' ? answers[i] === q.answerIndex : graded[i]?.isCorrect === true
+    ).length
+    const score = Math.round((correct / session.questions.length) * 100)
     const result: QuizResult = {
       id: `r-${Date.now()}`,
       title: session.title,
@@ -210,8 +215,31 @@ function AppInner() {
     navigate('results')
   }
 
+  const handleFinish = (answers: (number | string | null)[]) => {
+    if (!session) return
+    setFinalAnswers(answers)
+    const hasWritten = session.questions.some(q => q.type === 'written')
+    if (hasWritten) {
+      navigate('grading')
+    } else {
+      finalizeResult(answers, {})
+    }
+  }
+
+  const handleGradingDone = (graded: Record<number, WrittenGrade>) => {
+    finalizeResult(finalAnswers, graded)
+  }
+
+  const handleGradingError = () => {
+    // On échec de la correction IA, on affiche quand même les résultats —
+    // les questions écrites comptent comme non corrigées plutôt que de bloquer l'élève.
+    finalizeResult(finalAnswers, {})
+  }
+
   const handleRestart = () => {
     if (!session) return
+    setFinalAnswers([])
+    setWrittenGrading({})
     setSession({ ...session, currentIndex: 0, answers: Array(session.questions.length).fill(null), startedAt: new Date() })
     navigate('quiz')
   }
@@ -227,10 +255,24 @@ function AppInner() {
     navigate('home')
   }
 
+  // Bascule Autodidacte ↔ Pro sans frais (réservée aux abonnés Autodidacte)
+  // `billed_plan` n'est renseigné que si la bascule est déjà active — sinon `plan` EST le plan payé.
+  const billedPlan = profile?.billed_plan ?? profile?.plan
+  const handleToggleAutodidacteOverride = async () => {
+    if (!user || billedPlan !== 'autodidacte') return
+    try {
+      await setAutodidacteProOverride(user.id, profile?.plan_override !== 'pro')
+      await refreshProfile()
+    } catch (err) {
+      console.error('Bascule Autodidacte ↔ Pro — échec :', err)
+      alert(`Impossible de basculer de plan : ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   const renderPage = () => {
     switch (page) {
       case 'home':
-        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} />
+        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} onToggleAutodidacteOverride={handleToggleAutodidacteOverride} />
 
       case 'upload':
         return (
@@ -242,7 +284,7 @@ function AppInner() {
                 </div>
               </div>
             )}
-            <UploadPage onGenerate={handleGenerate} />
+            <UploadPage onGenerate={handleGenerate} plan={plan} role={profile?.role ?? 'student'} onUpgrade={() => showPaywall('sub')} />
           </>
         )
 
@@ -254,9 +296,20 @@ function AppInner() {
       case 'quiz':
         return session ? <QuizPage session={session} onFinish={handleFinish} /> : null
 
+      case 'grading':
+        return session
+          ? <GradingPage
+              session={session}
+              answers={finalAnswers}
+              language={generateOpts?.language ?? 'fr'}
+              onDone={handleGradingDone}
+              onError={handleGradingError}
+            />
+          : null
+
       case 'results':
         return session
-          ? <ResultsPage session={session} answers={finalAnswers} onNavigate={navigate} onRestart={handleRestart} onUpgrade={() => showPaywall('sub')} />
+          ? <ResultsPage session={session} answers={finalAnswers} writtenGrading={writtenGrading} onNavigate={navigate} onRestart={handleRestart} onUpgrade={() => showPaywall('sub')} />
           : null
 
       case 'history':
@@ -298,6 +351,9 @@ function AppInner() {
 
       case 'cartable':
         return <CartablePage />
+
+      case 'homework':
+        return <HomeworkPage />
 
       default:
         return null
