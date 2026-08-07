@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, Upload, ChevronLeft, BookOpen, FileText, Loader,
          GraduationCap, AlertTriangle, CheckCircle, XCircle, RefreshCw, RotateCcw,
          Volume2, Pause, Play, StopCircle, Library, ChevronDown, ChevronUp,
-         MessageCircle, Send, X, PenLine } from 'lucide-react'
+         MessageCircle, Send, X, PenLine, Rewind, FastForward, Bookmark } from 'lucide-react'
 import {
   getCahiers, createCahier, deleteCahier,
   getUAs, createUA, deleteUA,
   getDocuments, uploadDocument, deleteDocument,
   generateRevision, generateCahierSummary, generateUASummary, generateUARewrite,
-  callTutor, getUANotes, addUANote, deleteUANote,
+  callTutor, getUANotes, addUANote, deleteUANote, generateUAAudio, getUAAudioUrl, updateUAAudioMarkers,
   type Cahier, type UA, type CartableDocument, type RevisionExercise, type RevisionResult,
   type CartableUnitLabel, type UANote,
 } from '../utils/supabase'
@@ -441,6 +441,26 @@ function fmt(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} Mo`
 }
 
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+// Caché tant qu'on n'a pas des milliers d'utilisateurs (chaque voix = un nouveau
+// fichier audio généré/facturé par UA) — remettre à true pour le réactiver.
+const VOICE_PICKER_ENABLED = false
+
+const TTS_VOICES: { id: string; label: string }[] = [
+  { id: 'nova',    label: 'Nova — chaleureuse' },
+  { id: 'alloy',   label: 'Alloy — neutre' },
+  { id: 'echo',    label: 'Echo — posée' },
+  { id: 'fable',   label: 'Fable — expressive' },
+  { id: 'onyx',    label: 'Onyx — grave' },
+  { id: 'shimmer', label: 'Shimmer — douce' },
+]
+
 // ─── Composant correction après réponse ──────────────────────────────────────
 function ExerciseCorrection({ exercise, selected, onNext }: {
   exercise: RevisionExercise
@@ -806,17 +826,102 @@ export function CartablePage() {
   const [generalNoteDraft, setGeneralNoteDraft] = useState('')
   const readContentRef = useRef<HTMLDivElement>(null)
 
-  // Lecture audio (Web Speech API)
-  const [speaking, setSpeaking] = useState(false)
-  const [paused,   setPaused]   = useState(false)
+  // Lecture audio — voix IA (OpenAI TTS, Pro/Autodidacte/Enseignant) ou voix du navigateur (repli)
+  const [speaking,     setSpeaking]     = useState(false)
+  const [paused,       setPaused]       = useState(false)
+  const [audioLoading, setAudioLoading] = useState(false)
+  const [voice,        setVoice]        = useState<string>(() => localStorage.getItem('learni_tts_voice') || 'nova')
+  const [audioDuration, setAudioDuration] = useState(0)
+  const [audioTime,     setAudioTime]     = useState(0)
+  const [audioLevels,   setAudioLevels]   = useState<number[]>(new Array(24).fill(4))
+  const [markers,       setMarkers]       = useState<number[]>([])
+  const audioElRef = useRef<HTMLAudioElement | null>(null)
+  const rafRef      = useRef<number>(0)
+  // Verrou synchrone (contrairement à l'état React) pour empêcher un double-clic
+  // rapide de déclencher deux générations/appels API en même temps.
+  const audioLoadingRef = useRef(false)
+
+  const hasAIVoice = profile?.role === 'superadmin' || profile?.plan === 'pro' || profile?.plan === 'autodidacte' || profile?.plan === 'teacher'
+
+  // Visualiseur — animation simulée (pas branchée sur le circuit audio réel).
+  // Volontaire : rediriger la sortie d'un <audio> à travers l'API Web Audio
+  // (createMediaElementSource) peut couper le son sur certains navigateurs si le
+  // contexte n'est pas "réveillé" juste après un clic — trop risqué pour un simple effet visuel.
+  const stopVisualizer = () => {
+    cancelAnimationFrame(rafRef.current)
+    setAudioLevels(new Array(24).fill(4))
+  }
+
+  const startVisualizer = () => {
+    cancelAnimationFrame(rafRef.current)
+    const loop = () => {
+      setAudioLevels(prev => prev.map(v => Math.max(4, Math.min(40, v + (Math.random() - 0.5) * 24))))
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    loop()
+  }
+
+  const stopAllAudio = () => {
+    window.speechSynthesis.cancel()
+    if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null }
+    stopVisualizer()
+  }
 
   // Arrêter la lecture si on quitte la vue UA ou en démontant la page
   useEffect(() => {
-    if (view !== 'ua') { window.speechSynthesis.cancel(); setSpeaking(false); setPaused(false) }
+    if (view !== 'ua') { stopAllAudio(); setSpeaking(false); setPaused(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view])
-  useEffect(() => () => window.speechSynthesis.cancel(), [])
+  useEffect(() => () => stopAllAudio(), [])
 
-  const handleToggleReadAloud = () => {
+  const handleChangeVoice = (v: string) => {
+    setVoice(v)
+    localStorage.setItem('learni_tts_voice', v)
+  }
+
+  const handleToggleReadAloud = async () => {
+    if (hasAIVoice) {
+      const audio = audioElRef.current
+      if (audio && speaking && !paused) { audio.pause(); setPaused(true); stopVisualizer(); return }
+      if (audio && speaking && paused)  { audio.play(); setPaused(false); startVisualizer(); return }
+      if (!activeUA || !user || audioLoadingRef.current) return
+
+      audioLoadingRef.current = true
+      setAudioLoading(true); setError('')
+      try {
+        let url: string
+        if (activeUA.audio_path && activeUA.audio_language === revLang && activeUA.audio_voice === voice) {
+          url = await getUAAudioUrl(activeUA.audio_path)
+        } else {
+          const text = documents.map(d => d.text_content).join('\n\n').trim()
+          if (!text) return
+          url = await generateUAAudio(activeUA.id, user.id, text, revLang, voice)
+          const path = `${user.id}/${activeUA.id}-${revLang}-${voice}.mp3`
+          const apply = (u: UA) => u.id === activeUA.id ? { ...u, audio_path: path, audio_language: revLang, audio_voice: voice } : u
+          setActiveUA(u => u ? apply(u) : u)
+          setUAs(prev => prev.map(apply))
+        }
+        setMarkers(activeUA.audio_markers ?? [])
+        const audioEl = new Audio(url)
+        audioEl.addEventListener('loadedmetadata', () => setAudioDuration(audioEl.duration || 0))
+        audioEl.addEventListener('timeupdate', () => setAudioTime(audioEl.currentTime))
+        audioEl.onended = () => { setSpeaking(false); setPaused(false); stopVisualizer() }
+        audioEl.onerror = () => { setSpeaking(false); setPaused(false); stopVisualizer(); setError('Impossible de lire l\'audio.') }
+        audioElRef.current = audioEl
+        await audioEl.play()
+        startVisualizer()
+        setSpeaking(true)
+        setPaused(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Impossible de générer l\'audio.')
+      } finally {
+        audioLoadingRef.current = false
+        setAudioLoading(false)
+      }
+      return
+    }
+
+    // Repli — voix du navigateur (Web Speech API)
     const synth = window.speechSynthesis
     if (speaking && !paused) { synth.pause(); setPaused(true); return }
     if (speaking && paused)  { synth.resume(); setPaused(false); return }
@@ -835,9 +940,33 @@ export function CartablePage() {
   }
 
   const handleStopReadAloud = () => {
-    window.speechSynthesis.cancel()
+    stopAllAudio()
     setSpeaking(false)
     setPaused(false)
+  }
+
+  const handleSeekTo = (t: number) => {
+    if (audioElRef.current) { audioElRef.current.currentTime = t; setAudioTime(t) }
+  }
+
+  const handleSkip = (delta: number) => {
+    if (!audioElRef.current) return
+    handleSeekTo(Math.min(Math.max(0, audioElRef.current.currentTime + delta), audioDuration))
+  }
+
+  const handleAddMarker = async () => {
+    if (!audioElRef.current || !activeUA) return
+    const t = Math.floor(audioElRef.current.currentTime)
+    if (markers.includes(t)) return
+    const updated = [...markers, t].sort((a, b) => a - b)
+    setMarkers(updated)
+    try { await updateUAAudioMarkers(activeUA.id, updated) } catch { /* pas critique */ }
+  }
+
+  const handleRemoveMarker = async (t: number) => {
+    const updated = markers.filter(m => m !== t)
+    setMarkers(updated)
+    if (activeUA) { try { await updateUAAudioMarkers(activeUA.id, updated) } catch { /* pas critique */ } }
   }
 
   // Modals création
@@ -880,6 +1009,9 @@ export function CartablePage() {
     setActiveUA(ua)
     const docs = ua.documents ?? await getDocuments(ua.id)
     setDocuments(docs)
+    setMarkers(ua.audio_markers ?? [])
+    setAudioDuration(0)
+    setAudioTime(0)
     setView('ua')
   }
 
@@ -1307,25 +1439,40 @@ export function CartablePage() {
             </h1>
             <p style={{ color: 'var(--muted)', fontSize: 13 }}>{documents.length} document{documents.length > 1 ? 's' : ''}</p>
           </div>
-          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {VOICE_PICKER_ENABLED && hasAIVoice && documents.length > 0 && (
+              <select
+                value={voice}
+                onChange={e => handleChangeVoice(e.target.value)}
+                title="Choisir la voix"
+                style={{
+                  padding: '9px 10px', background: 'var(--bg3)', border: '1px solid var(--border)',
+                  borderRadius: 10, color: 'var(--text)', fontSize: 12,
+                }}
+              >
+                {TTS_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            )}
             <button
               onClick={handleToggleReadAloud}
-              disabled={documents.length === 0}
-              title={documents.length === 0 ? 'Ajoute un document pour activer la lecture audio' : undefined}
+              disabled={documents.length === 0 || audioLoading}
+              title={documents.length === 0 ? 'Ajoute un document pour activer la lecture audio' : hasAIVoice ? 'Voix IA (OpenAI)' : undefined}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '10px 16px', background: documents.length > 0 ? '#2d1b69' : 'var(--bg3)',
                 border: `1px solid ${documents.length > 0 ? '#4a3080' : 'var(--border)'}`, borderRadius: 10,
                 color: documents.length > 0 ? '#a78bfa' : '#555',
                 fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 700,
-                cursor: documents.length > 0 ? 'pointer' : 'not-allowed',
+                cursor: documents.length > 0 && !audioLoading ? 'pointer' : 'not-allowed',
               }}
             >
-              {speaking && !paused
-                ? <><Pause size={15} /> Pause</>
-                : speaking && paused
-                  ? <><Play size={15} /> Reprendre</>
-                  : <><Volume2 size={15} /> Lire à voix haute</>}
+              {audioLoading
+                ? <><Loader size={15} className="spin" /> Génération de la voix…</>
+                : speaking && !paused
+                  ? <><Pause size={15} /> Pause</>
+                  : speaking && paused
+                    ? <><Play size={15} /> Reprendre</>
+                    : <><Volume2 size={15} /> {hasAIVoice ? 'Lire à voix haute (IA)' : 'Lire à voix haute'}</>}
             </button>
             {speaking && (
               <button onClick={handleStopReadAloud} style={{
@@ -1351,6 +1498,88 @@ export function CartablePage() {
             </button>
           </div>
         </div>
+
+        {/* Lecteur audio IA — visualiseur, progression, avance/recul, repères */}
+        {hasAIVoice && (speaking || paused) && (
+          <div style={{ background: 'var(--bg2)', border: '1px solid #4a3080', borderRadius: 14, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+            {/* Visualiseur type dictaphone */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3, height: 40, marginBottom: 12 }}>
+              {audioLevels.map((lvl, i) => (
+                <div key={i} style={{
+                  width: 4, borderRadius: 2,
+                  height: Math.max(4, (lvl / 255) * 40),
+                  background: paused ? '#555' : 'linear-gradient(180deg, #a78bfa, #7c3aed)',
+                  transition: 'height .08s ease',
+                }} />
+              ))}
+            </div>
+
+            {/* Barre de progression + repères */}
+            <div style={{ position: 'relative', marginBottom: 4 }}>
+              <input
+                type="range" min={0} max={audioDuration || 0} step={0.1} value={audioTime}
+                onChange={e => handleSeekTo(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#a78bfa', display: 'block' }}
+              />
+              {markers.map(t => (
+                <div
+                  key={t}
+                  onClick={() => handleSeekTo(t)}
+                  title={formatTime(t)}
+                  style={{
+                    position: 'absolute', top: 8, left: `${audioDuration ? (t / audioDuration) * 100 : 0}%`,
+                    width: 2, height: 8, background: '#f5a623', cursor: 'pointer', pointerEvents: 'auto',
+                  }}
+                />
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+              <span>{formatTime(audioTime)}</span>
+              <span>{formatTime(audioDuration)}</span>
+            </div>
+
+            {/* Contrôles */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <button onClick={() => handleSkip(-10)} title="Reculer 10s" style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', padding: 6 }}>
+                <Rewind size={18} />
+              </button>
+              <button onClick={handleToggleReadAloud} title={paused ? 'Reprendre' : 'Pause'} style={{
+                width: 40, height: 40, borderRadius: '50%', border: 'none', background: '#2d1b69',
+                color: '#a78bfa', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {paused ? <Play size={18} /> : <Pause size={18} />}
+              </button>
+              <button onClick={() => handleSkip(10)} title="Avancer 10s" style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', padding: 6 }}>
+                <FastForward size={18} />
+              </button>
+              <button onClick={handleAddMarker} title="Ajouter un repère ici" style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 20,
+                background: 'transparent', border: '1px solid #4a3080', color: '#a78bfa', cursor: 'pointer', fontSize: 12,
+              }}>
+                <Bookmark size={13} /> Marquer
+              </button>
+            </div>
+
+            {/* Liste des repères */}
+            {markers.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, justifyContent: 'center' }}>
+                {markers.map(t => (
+                  <span key={t} style={{
+                    display: 'flex', alignItems: 'center', gap: 4, padding: '3px 4px 3px 10px',
+                    borderRadius: 20, background: '#2a1f00', color: '#f5a623', fontSize: 11,
+                  }}>
+                    <button onClick={() => handleSeekTo(t)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11 }}>
+                      🔖 {formatTime(t)}
+                    </button>
+                    <button onClick={() => handleRemoveMarker(t)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 3, display: 'flex' }}>
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && <div style={{ padding: '10px 14px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 8, color: '#f87171', fontSize: 13, marginBottom: '1rem' }}>{error}</div>}
 

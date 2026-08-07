@@ -878,6 +878,10 @@ export interface UA {
   rewritten_content?: string | null
   rewritten_comments?: Record<string, string> | null
   content_generated_at?: string | null
+  audio_path?: string | null
+  audio_language?: string | null
+  audio_voice?: string | null
+  audio_markers?: number[] | null
 }
 
 export interface CartableDocument {
@@ -1068,6 +1072,60 @@ export async function generateUARewrite(
     .update({ rewritten_content: rewritten, rewritten_comments: comments, content_generated_at: new Date().toISOString() })
     .eq('id', uaId)
   return { rewritten, comments }
+}
+
+// ─── Mon Cartable — voix IA (Pro / Autodidacte), audio mis en cache ──────────
+
+export async function getUAAudioUrl(path: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('cartable-audio')
+    .createSignedUrl(path, 3600)
+  if (error) throw new Error(error.message)
+  return data.signedUrl
+}
+
+// Génère l'audio via OpenAI TTS, le met en cache dans Storage, et retourne une
+// URL de lecture. Un même UA + langue n'est synthétisé qu'une seule fois.
+export async function generateUAAudio(
+  uaId: string, userId: string, text: string, language: 'fr' | 'en', voice = 'nova'
+): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ text, voice }),
+    }
+  )
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(err.error ?? `Erreur serveur: ${response.status}`)
+  }
+  const blob = await response.blob()
+
+  const path = `${userId}/${uaId}-${language}-${voice}.mp3`
+  const { error: uploadError } = await supabase.storage
+    .from('cartable-audio')
+    .upload(path, blob, { contentType: 'audio/mpeg', upsert: true })
+  if (uploadError) throw new Error(uploadError.message)
+
+  await supabase.from('cartable_uas')
+    .update({ audio_path: path, audio_language: language, audio_voice: voice })
+    .eq('id', uaId)
+
+  return getUAAudioUrl(path)
+}
+
+export async function updateUAAudioMarkers(uaId: string, markers: number[]): Promise<void> {
+  const { error } = await supabase.from('cartable_uas').update({ audio_markers: markers }).eq('id', uaId)
+  if (error) throw new Error(error.message)
 }
 
 // ─── Aide aux devoirs (tuteur IA) ─────────────────────────────────────────────
