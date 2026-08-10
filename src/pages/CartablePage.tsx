@@ -879,45 +879,60 @@ export function CartablePage() {
     localStorage.setItem('learni_tts_voice', v)
   }
 
+  const playAudioUrl = async (url: string) => {
+    const audioEl = new Audio(url)
+    audioEl.addEventListener('loadedmetadata', () => setAudioDuration(audioEl.duration || 0))
+    audioEl.addEventListener('timeupdate', () => setAudioTime(audioEl.currentTime))
+    audioEl.onended = () => { setSpeaking(false); setPaused(false); stopVisualizer() }
+    audioEl.onerror = () => { setSpeaking(false); setPaused(false); stopVisualizer(); setError('Impossible de lire l\'audio.') }
+    audioElRef.current = audioEl
+    await audioEl.play()
+    startVisualizer()
+    setSpeaking(true)
+    setPaused(false)
+  }
+
+  // `forceRegenerate` ignore le cache et redemande une nouvelle synthèse (bouton "Régénérer")
+  const loadAIVoice = async (forceRegenerate: boolean) => {
+    if (!activeUA || !user || audioLoadingRef.current) return
+
+    audioLoadingRef.current = true
+    setAudioLoading(true); setError('')
+    try {
+      let url: string
+      if (!forceRegenerate && activeUA.audio_path && activeUA.audio_language === revLang && activeUA.audio_voice === voice) {
+        url = await getUAAudioUrl(activeUA.audio_path)
+      } else {
+        const text = documents.map(d => d.text_content).join('\n\n').trim()
+        if (!text) return
+        url = await generateUAAudio(activeUA.id, user.id, text, revLang, voice)
+        const path = `${user.id}/${activeUA.id}-${revLang}-${voice}.mp3`
+        const apply = (u: UA) => u.id === activeUA.id ? { ...u, audio_path: path, audio_language: revLang, audio_voice: voice } : u
+        setActiveUA(u => u ? apply(u) : u)
+        setUAs(prev => prev.map(apply))
+      }
+      setMarkers(activeUA.audio_markers ?? [])
+      await playAudioUrl(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossible de générer l\'audio.')
+    } finally {
+      audioLoadingRef.current = false
+      setAudioLoading(false)
+    }
+  }
+
+  const handleRegenerateAudio = async () => {
+    stopAllAudio()
+    setSpeaking(false); setPaused(false)
+    await loadAIVoice(true)
+  }
+
   const handleToggleReadAloud = async () => {
     if (hasAIVoice) {
       const audio = audioElRef.current
       if (audio && speaking && !paused) { audio.pause(); setPaused(true); stopVisualizer(); return }
       if (audio && speaking && paused)  { audio.play(); setPaused(false); startVisualizer(); return }
-      if (!activeUA || !user || audioLoadingRef.current) return
-
-      audioLoadingRef.current = true
-      setAudioLoading(true); setError('')
-      try {
-        let url: string
-        if (activeUA.audio_path && activeUA.audio_language === revLang && activeUA.audio_voice === voice) {
-          url = await getUAAudioUrl(activeUA.audio_path)
-        } else {
-          const text = documents.map(d => d.text_content).join('\n\n').trim()
-          if (!text) return
-          url = await generateUAAudio(activeUA.id, user.id, text, revLang, voice)
-          const path = `${user.id}/${activeUA.id}-${revLang}-${voice}.mp3`
-          const apply = (u: UA) => u.id === activeUA.id ? { ...u, audio_path: path, audio_language: revLang, audio_voice: voice } : u
-          setActiveUA(u => u ? apply(u) : u)
-          setUAs(prev => prev.map(apply))
-        }
-        setMarkers(activeUA.audio_markers ?? [])
-        const audioEl = new Audio(url)
-        audioEl.addEventListener('loadedmetadata', () => setAudioDuration(audioEl.duration || 0))
-        audioEl.addEventListener('timeupdate', () => setAudioTime(audioEl.currentTime))
-        audioEl.onended = () => { setSpeaking(false); setPaused(false); stopVisualizer() }
-        audioEl.onerror = () => { setSpeaking(false); setPaused(false); stopVisualizer(); setError('Impossible de lire l\'audio.') }
-        audioElRef.current = audioEl
-        await audioEl.play()
-        startVisualizer()
-        setSpeaking(true)
-        setPaused(false)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Impossible de générer l\'audio.')
-      } finally {
-        audioLoadingRef.current = false
-        setAudioLoading(false)
-      }
+      await loadAIVoice(false)
       return
     }
 
@@ -1484,6 +1499,20 @@ export function CartablePage() {
                 <StopCircle size={15} /> Arrêter
               </button>
             )}
+            {hasAIVoice && activeUA.audio_path && !audioLoading && (
+              <button
+                onClick={handleRegenerateAudio}
+                title="Régénérer l'audio (nouvelle synthèse, remplace la version en cache)"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '10px 14px', background: 'transparent',
+                  border: '1px solid var(--border)', borderRadius: 10, color: 'var(--muted)',
+                  fontSize: 13, cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={15} /> Régénérer
+              </button>
+            )}
             <button
               onClick={() => startRevision(activeUA, 'ua')}
               disabled={documents.length === 0}
@@ -1617,7 +1646,7 @@ export function CartablePage() {
           onMouseLeave={e => (e.currentTarget.style.borderColor = '#4a3080')}
         >
           <input
-            id="ua-photo-input" type="file" accept="image/*" capture="environment" multiple
+            id="ua-photo-input" type="file" accept="image/*" multiple
             style={{ display: 'none' }}
             onChange={e => {
               const files = Array.from(e.target.files ?? [])

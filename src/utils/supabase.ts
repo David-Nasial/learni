@@ -1101,7 +1101,7 @@ export async function generateUAAudio(
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ text, voice }),
+      body: JSON.stringify({ text, voice, language }),
     }
   )
   if (!response.ok) {
