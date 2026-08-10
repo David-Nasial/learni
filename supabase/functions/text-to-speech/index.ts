@@ -67,7 +67,7 @@ Réponds UNIQUEMENT avec le texte prêt à être lu à voix haute, sans commenta
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
+        max_tokens: 16000,
         system: 'Tu prépares des textes pour la narration audio. Réponds uniquement avec le texte final, sans balises markdown, sans commentaire.',
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -75,6 +75,11 @@ Réponds UNIQUEMENT avec le texte prêt à être lu à voix haute, sans commenta
     if (!response.ok) return text // en cas d'échec, on lit quand même le texte nettoyé de base
 
     const data = await response.json()
+
+    // Réponse coupée net faute de place : la fin du segment manquerait à l'oral.
+    // On préfère lire le texte d'origine en entier plutôt qu'une réécriture amputée.
+    if (data.stop_reason === 'max_tokens') return text
+
     const narration = data.content
       .filter((b: { type: string }) => b.type === 'text')
       .map((b: { text: string }) => b.text)
@@ -83,8 +88,7 @@ Réponds UNIQUEMENT avec le texte prêt à être lu à voix haute, sans commenta
     if (!narration) return text
 
     // Garde-fou : la réécriture doit reformuler, pas résumer. Si la sortie est
-    // nettement plus courte que l'entrée (réponse tronquée, condensée, ou refus),
-    // on lit le texte d'origine — mieux vaut une lecture brute que du contenu perdu.
+    // nettement plus courte que l'entrée (condensée ou refus), on lit l'original.
     if (narration.length < text.length * 0.6) return text
 
     return narration
@@ -146,7 +150,17 @@ function chunkText(text: string, maxLen = MAX_CHUNK): string[] {
   }
   flush()
 
-  return chunks.length > 0 ? chunks : [text.slice(0, maxLen)]
+  const result = chunks.length > 0 ? chunks : [text]
+
+  // Filet de sécurité : une "phrase" sans ponctuation (fréquent dans un PDF
+  // extrait) peut dépasser la limite d'OpenAI — on la recoupe en force plutôt
+  // que de laisser l'appel échouer et perdre le passage.
+  const safe: string[] = []
+  for (const chunk of result) {
+    if (chunk.length <= maxLen) { safe.push(chunk); continue }
+    for (let i = 0; i < chunk.length; i += maxLen) safe.push(chunk.slice(i, i + maxLen))
+  }
+  return safe
 }
 
 async function synthesizeChunk(text: string, voice: string): Promise<Uint8Array> {
