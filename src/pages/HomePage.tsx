@@ -162,7 +162,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
               Prêt à apprendre quelque chose aujourd'hui ?
             </p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginLeft: 'auto' }}>
             <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
               Ton plan
             </span>

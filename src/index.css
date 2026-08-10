@@ -69,3 +69,20 @@ a { color: inherit; text-decoration: none; }
   .cartable-split { flex-direction: column; }
   .cartable-split-left, .cartable-split-right { flex: 1 1 100%; }
 }
+
+/* ─── Aide aux devoirs — sidebar repliable sur mobile ──────────────────────── */
+.homework-toggle-btn { display: none; }
+.homework-sidebar-backdrop { display: none; }
+@media (max-width: 760px) {
+  .homework-toggle-btn { display: inline-flex !important; }
+  .homework-sidebar {
+    position: fixed; top: 64px; bottom: 0; left: 0; width: 280px; z-index: 95;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+  }
+  .homework-sidebar.open { transform: translateX(0); }
+  .homework-sidebar-backdrop.open {
+    display: block; position: fixed; top: 64px; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,.5); z-index: 94;
+  }
+}

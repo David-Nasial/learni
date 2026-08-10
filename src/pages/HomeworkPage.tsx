@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Trash2, Send, Paperclip, Loader, PenTool, X, FileText } from 'lucide-react'
+import { Plus, Trash2, Send, Paperclip, Loader, PenTool, X, FileText, Menu } from 'lucide-react'
 import {
   getHomeworkSessions, createHomeworkSession, deleteHomeworkSession,
   getHomeworkMessages, addHomeworkMessage, renameHomeworkSession, touchHomeworkSession,
@@ -35,6 +35,7 @@ export function HomeworkPage() {
 
   const [pendingAttachment, setPendingAttachment] = useState<{ name: string; text: string } | null>(null)
   const [attaching, setAttaching] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -60,6 +61,7 @@ export function HomeworkPage() {
   const openSession = async (s: HomeworkSession) => {
     setActiveSession(s)
     setError('')
+    setSidebarOpen(false)
     setLoadingMessages(true)
     try { setMessages(await getHomeworkMessages(s.id)) }
     catch { setError('Impossible de charger cette conversation.') }
@@ -71,6 +73,7 @@ export function HomeworkPage() {
     setMessages([])
     setError('')
     setPendingAttachment(null)
+    setSidebarOpen(false)
   }
 
   const handleDeleteSession = async (s: HomeworkSession, e: React.MouseEvent) => {
@@ -164,9 +167,15 @@ export function HomeworkPage() {
   )
 
   return (
-    <div className="fade-in" style={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+    <div className="fade-in" style={{ display: 'flex', height: 'calc(100vh - 64px)', position: 'relative' }}>
+      {/* Rideau — ferme la sidebar au clic en dehors (mobile uniquement) */}
+      <div
+        className={`homework-sidebar-backdrop${sidebarOpen ? ' open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar conversations */}
-      <aside style={{
+      <aside className={`homework-sidebar${sidebarOpen ? ' open' : ''}`} style={{
         width: 280, flexShrink: 0, background: 'var(--bg2)',
         borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto',
       }}>
@@ -215,6 +224,23 @@ export function HomeworkPage() {
 
       {/* Chat */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+          <button
+            className="homework-toggle-btn"
+            onClick={() => setSidebarOpen(o => !o)}
+            title="Mes conversations"
+            style={{
+              alignItems: 'center', justifyContent: 'center',
+              background: 'none', border: '1px solid var(--border)', borderRadius: 8,
+              color: 'var(--muted)', cursor: 'pointer', padding: 7, flexShrink: 0,
+            }}
+          >
+            <Menu size={16} />
+          </button>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--white)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {activeSession?.title ?? 'Nouvelle conversation'}
+          </span>
+        </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {loadingMessages ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
