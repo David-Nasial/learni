@@ -848,6 +848,9 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   // Verrou synchrone (contrairement à l'état React) pour empêcher un double-clic
   // rapide de déclencher deux générations/appels API en même temps.
   const audioLoadingRef = useRef(false)
+  // Incrémenté à chaque appel à playPart — un appel "périmé" (supplanté par un
+  // plus récent pendant son chargement) se retire au lieu de jouer en double.
+  const playTokenRef = useRef(0)
 
   const hasAIVoice = profile?.role === 'superadmin' || profile?.plan === 'pro' || profile?.plan === 'autodidacte' || profile?.plan === 'teacher'
   const currentMarkers = markers.filter(m => m.part === currentPart)
@@ -871,8 +874,14 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   }
 
   const stopAllAudio = () => {
+    playTokenRef.current++ // invalide tout appel à playPart en cours de chargement
     window.speechSynthesis.cancel()
-    if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null }
+    if (audioElRef.current) {
+      audioElRef.current.onended = null
+      audioElRef.current.onerror = null
+      audioElRef.current.pause()
+      audioElRef.current = null
+    }
     stopVisualizer()
   }
 
@@ -890,11 +899,30 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
 
   // Joue une capsule précise — enchaîne automatiquement sur la suivante à la fin (comme un livre audio)
   const playPart = async (parts: AudioPart[], index: number) => {
+    // Jeton de lecture : si un autre appel à playPart démarre entre-temps (double
+    // clic, avance manuelle pendant l'enchaînement automatique…), cet appel-ci se
+    // retire proprement au lieu de faire jouer deux audios en même temps.
+    const myToken = ++playTokenRef.current
+
+    if (audioElRef.current) {
+      audioElRef.current.onended = null
+      audioElRef.current.onerror = null
+      audioElRef.current.pause()
+      audioElRef.current = null
+    }
+    setAudioDuration(0)
+    setAudioTime(0)
+
     const url = await getUAAudioUrl(parts[index].path)
+    if (myToken !== playTokenRef.current) return // supplanté pendant le chargement de l'URL
+
     const audioEl = new Audio(url)
-    audioEl.addEventListener('loadedmetadata', () => setAudioDuration(audioEl.duration || 0))
+    const updateDuration = () => { if (Number.isFinite(audioEl.duration)) setAudioDuration(audioEl.duration) }
+    audioEl.addEventListener('loadedmetadata', updateDuration)
+    audioEl.addEventListener('durationchange', updateDuration)
     audioEl.addEventListener('timeupdate', () => setAudioTime(audioEl.currentTime))
     audioEl.onended = () => {
+      if (myToken !== playTokenRef.current) return
       if (index + 1 < parts.length) {
         setCurrentPart(index + 1)
         playPart(parts, index + 1).catch(() => setError('Impossible de lire l\'audio.'))
@@ -902,10 +930,14 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
         setSpeaking(false); setPaused(false); stopVisualizer()
       }
     }
-    audioEl.onerror = () => { setSpeaking(false); setPaused(false); stopVisualizer(); setError('Impossible de lire l\'audio.') }
+    audioEl.onerror = () => {
+      if (myToken !== playTokenRef.current) return
+      setSpeaking(false); setPaused(false); stopVisualizer(); setError('Impossible de lire l\'audio.')
+    }
     audioElRef.current = audioEl
-    setAudioTime(0)
     await audioEl.play()
+    if (myToken !== playTokenRef.current) { audioEl.pause(); return } // supplanté pendant le démarrage
+
     startVisualizer()
     setSpeaking(true)
     setPaused(false)
