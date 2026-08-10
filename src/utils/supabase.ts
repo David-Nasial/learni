@@ -136,6 +136,7 @@ export async function saveResultToCloud(userId: string, result: QuizResult) {
     correct:          result.correct,
     total:            result.total,
     duration_seconds: result.durationSeconds,
+    topic_results:    result.topicResults ?? null,
     created_at:       new Date().toISOString(),
   })
   if (error) throw new Error(error.message)
@@ -156,6 +157,7 @@ export async function getResultsFromCloud(userId: string): Promise<QuizResult[]>
     total:           r.total as number,
     date:            new Date(r.created_at as string).toLocaleDateString('fr-CA'),
     durationSeconds: r.duration_seconds as number,
+    topicResults:    (r.topic_results as QuizResult['topicResults']) ?? undefined,
   }))
 }
 

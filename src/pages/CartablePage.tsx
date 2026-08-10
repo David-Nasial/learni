@@ -785,7 +785,7 @@ function RevisionView({ cahier, targetUA, mode, lang, onBack }: {
 }
 
 // ─── Page principale Cartable ─────────────────────────────────────────────────
-export function CartablePage() {
+export function CartablePage({ onGenerateFlashcards }: { onGenerateFlashcards?: (text: string, title: string) => void } = {}) {
   const { user, profile } = useAuth()
   const hasAccess = profile?.role === 'superadmin' || ['pro', 'teacher'].includes(profile?.plan ?? '')
 
@@ -1280,6 +1280,14 @@ export function CartablePage() {
     setRevTargetUA(ua)
     setRevMode(mode)
     setView('revision')
+  }
+
+  const handleGenerateFlashcardsForUA = (ua: UA, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const text = (ua.documents ?? []).map(d => d.text_content).join('\n\n').trim()
+    if (!text) return
+    const title = ua.label || unitTitle(activeCahier, ua.number)
+    onGenerateFlashcards?.(text, title)
   }
 
   if (!hasAccess) {
@@ -1800,6 +1808,19 @@ export function CartablePage() {
                       }}
                     >
                       📖 Réviser
+                    </button>
+                    <button
+                      onClick={e => handleGenerateFlashcardsForUA(ua, e)}
+                      disabled={(ua.documents?.length ?? 0) === 0}
+                      title="Générer des flashcards à partir de ce contenu"
+                      style={{
+                        padding: '5px 12px', borderRadius: 8,
+                        background: (ua.documents?.length ?? 0) > 0 ? '#1a1033' : 'var(--bg3)',
+                        border: '1px solid #4a3080', color: '#c4b5fd',
+                        fontSize: 12, fontWeight: 600, cursor: (ua.documents?.length ?? 0) > 0 ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      🗂️ Flashcards
                     </button>
                     <button onClick={e => handleDeleteUA(ua, e)} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }}>
                       <Trash2 size={15} />

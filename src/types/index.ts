@@ -25,6 +25,12 @@ export interface QuizSession {
   finishedAt?: Date
 }
 
+export interface TopicResult {
+  topic: string
+  correct: number
+  total: number
+}
+
 export interface QuizResult {
   id: string
   title: string
@@ -33,6 +39,7 @@ export interface QuizResult {
   total: number
   date: string
   durationSeconds: number
+  topicResults?: TopicResult[]
 }
 
 export type QuizLength = 10 | 20 | 35

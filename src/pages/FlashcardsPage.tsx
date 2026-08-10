@@ -12,6 +12,8 @@ import type { Flashcard } from '../types'
 type Step = 'library' | 'setup' | 'loading' | 'review'
 type Lang = 'fr' | 'en'
 
+interface FlashcardsPrefill { text: string; title: string }
+
 // ─── Carte flip ───────────────────────────────────────────────────────────────
 function Card({ card, index, total }: { card: Flashcard; index: number; total: number }) {
   const [flipped, setFlipped] = useState(false)
@@ -82,7 +84,10 @@ function Card({ card, index, total }: { card: Flashcard; index: number; total: n
 }
 
 // ─── Page principale ──────────────────────────────────────────────────────────
-export function FlashcardsPage() {
+export function FlashcardsPage({ prefill, onConsumedPrefill }: {
+  prefill?: FlashcardsPrefill | null
+  onConsumedPrefill?: () => void
+} = {}) {
   const { user } = useAuth()
 
   const [step,     setStep]     = useState<Step>('library')
@@ -113,6 +118,42 @@ export function FlashcardsPage() {
       .catch(() => {})
       .finally(() => setLoadingSets(false))
   }, [user])
+
+  // Génération automatique depuis Mon Cartable (bouton "Flashcards" sur une UA/un chapitre)
+  useEffect(() => {
+    if (!prefill) return
+    const { text, title } = prefill
+    onConsumedPrefill?.()
+
+    let cancelled = false
+    ;(async () => {
+      setError('')
+      setGenerating(true)
+      setStep('loading')
+      try {
+        const result = await generateFlashcards(text, numCards, lang, title)
+        if (cancelled) return
+        let saved: FlashcardSet | null = null
+        if (user) {
+          saved = await saveFlashcardSet(user.id, title, title, text, result)
+          setSets(prev => [saved!, ...prev])
+        }
+        setCards(result)
+        setIndex(0)
+        setActiveSet(saved)
+        setStep('review')
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Erreur lors de la génération.')
+        setStep('library')
+      } finally {
+        if (!cancelled) setGenerating(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()

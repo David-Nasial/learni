@@ -117,6 +117,7 @@ function AppInner() {
   const [finalAnswers, setFinalAnswers] = useState<(number | string | null)[]>([])
   const [writtenGrading, setWrittenGrading] = useState<Record<number, WrittenGrade>>({})
   const [genError, setGenError]         = useState('')
+  const [flashcardsPrefill, setFlashcardsPrefill] = useState<{ text: string; title: string } | null>(null)
 
   // Onboarding
   const [onboardingType, setOnboarding] = useState<'first' | Plan | null>(null)
@@ -196,10 +197,22 @@ function AppInner() {
   const finalizeResult = async (answers: (number | string | null)[], graded: Record<number, WrittenGrade>) => {
     if (!session) return
     setWrittenGrading(graded)
-    const correct = session.questions.filter((q, i) =>
+    const isCorrect = (q: Question, i: number) =>
       q.type === 'mcq' ? answers[i] === q.answerIndex : graded[i]?.isCorrect === true
-    ).length
+    const correct = session.questions.filter((q, i) => isCorrect(q, i)).length
     const score = Math.round((correct / session.questions.length) * 100)
+
+    // Détail par thème — sert aux conseils de révision (rouge/jaune) sur la page Historique
+    const topicMap = new Map<string, { correct: number; total: number }>()
+    session.questions.forEach((q, i) => {
+      const topic = q.topic?.trim() || 'Général'
+      const entry = topicMap.get(topic) ?? { correct: 0, total: 0 }
+      entry.total += 1
+      if (isCorrect(q, i)) entry.correct += 1
+      topicMap.set(topic, entry)
+    })
+    const topicResults = Array.from(topicMap.entries()).map(([topic, v]) => ({ topic, ...v }))
+
     const result: QuizResult = {
       id: `r-${Date.now()}`,
       title: session.title,
@@ -207,6 +220,7 @@ function AppInner() {
       total: session.questions.length,
       date: new Date().toLocaleDateString('fr-CA'),
       durationSeconds: Math.round((Date.now() - session.startedAt.getTime()) / 1000),
+      topicResults,
     }
     setResults([result, ...results])
     if (user) {
@@ -327,7 +341,7 @@ function AppInner() {
           : null
 
       case 'history':
-        return <HistoryPage results={results} onUpgrade={() => showPaywall('sub')} />
+        return <HistoryPage results={results} onUpgrade={() => showPaywall('sub')} profile={profile} />
 
       case 'pricing':
         return <PricingPage onUpgrade={(p) => { setPlan(p as Plan); setPaywall(null) } } onTeacher={() => showPaywall('teacher')} appMode={appMode} onLogin={() => navigate('login')} />
@@ -361,10 +375,10 @@ function AppInner() {
         return <CommunityPage appMode={appMode} />
 
       case 'flashcards':
-        return <FlashcardsPage />
+        return <FlashcardsPage prefill={flashcardsPrefill} onConsumedPrefill={() => setFlashcardsPrefill(null)} />
 
       case 'cartable':
-        return <CartablePage />
+        return <CartablePage onGenerateFlashcards={(text, title) => { setFlashcardsPrefill({ text, title }); navigate('flashcards') }} />
 
       case 'homework':
         return <HomeworkPage />
