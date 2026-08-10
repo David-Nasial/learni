@@ -806,6 +806,7 @@ export interface FlashcardSet {
   cards: { front: string; back: string; topic: string }[]
   created_at: string
   updated_at: string
+  ua_id?: string | null
 }
 
 export async function saveFlashcardSet(
@@ -813,11 +814,12 @@ export async function saveFlashcardSet(
   title: string,
   subject: string,
   sourceText: string,
-  cards: { front: string; back: string; topic: string }[]
+  cards: { front: string; back: string; topic: string }[],
+  uaId?: string
 ): Promise<FlashcardSet> {
   const { data, error } = await supabase
     .from('flashcard_sets')
-    .insert({ user_id: userId, title, subject, source_text: sourceText, cards })
+    .insert({ user_id: userId, title, subject, source_text: sourceText, cards, ua_id: uaId ?? null })
     .select()
     .single()
   if (error) throw new Error(error.message)
@@ -832,6 +834,19 @@ export async function getFlashcardSets(userId: string): Promise<FlashcardSet[]> 
     .order('updated_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data ?? []) as FlashcardSet[]
+}
+
+// Retrouve le jeu déjà généré pour une UA de Mon Cartable, pour éviter d'en recréer un à chaque clic.
+export async function getFlashcardSetByUA(uaId: string): Promise<FlashcardSet | null> {
+  const { data, error } = await supabase
+    .from('flashcard_sets')
+    .select('*')
+    .eq('ua_id', uaId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) return null
+  return (data as FlashcardSet) ?? null
 }
 
 export async function updateFlashcardSet(

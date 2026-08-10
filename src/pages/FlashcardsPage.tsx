@@ -12,7 +12,9 @@ import type { Flashcard } from '../types'
 type Step = 'library' | 'setup' | 'loading' | 'review'
 type Lang = 'fr' | 'en'
 
-interface FlashcardsPrefill { text: string; title: string }
+type FlashcardsPrefill =
+  | { mode: 'generate'; text: string; title: string; uaId?: string }
+  | { mode: 'open'; set: FlashcardSet }
 
 // ─── Carte flip ───────────────────────────────────────────────────────────────
 function Card({ card, index, total }: { card: Flashcard; index: number; total: number }) {
@@ -122,9 +124,18 @@ export function FlashcardsPage({ prefill, onConsumedPrefill }: {
   // Génération automatique depuis Mon Cartable (bouton "Flashcards" sur une UA/un chapitre)
   useEffect(() => {
     if (!prefill) return
-    const { text, title } = prefill
     onConsumedPrefill?.()
 
+    if (prefill.mode === 'open') {
+      const { set } = prefill
+      setActiveSet(set)
+      setCards(set.cards as Flashcard[])
+      setIndex(0)
+      setStep('review')
+      return
+    }
+
+    const { text, title, uaId } = prefill
     let cancelled = false
     ;(async () => {
       setError('')
@@ -135,7 +146,7 @@ export function FlashcardsPage({ prefill, onConsumedPrefill }: {
         if (cancelled) return
         let saved: FlashcardSet | null = null
         if (user) {
-          saved = await saveFlashcardSet(user.id, title, title, text, result)
+          saved = await saveFlashcardSet(user.id, title, title, text, result, uaId)
           setSets(prev => [saved!, ...prev])
         }
         setCards(result)

@@ -9,6 +9,7 @@ import {
   getDocuments, uploadDocument, deleteDocument,
   generateRevision, generateCahierSummary, generateUASummary, generateUARewrite,
   callTutor, getUANotes, addUANote, deleteUANote, generateUAAudio, getUAAudioUrl, updateUAAudioMarkers,
+  getFlashcardSetByUA, type FlashcardSet,
   type Cahier, type UA, type CartableDocument, type RevisionExercise, type RevisionResult,
   type CartableUnitLabel, type UANote,
 } from '../utils/supabase'
@@ -785,7 +786,10 @@ function RevisionView({ cahier, targetUA, mode, lang, onBack }: {
 }
 
 // ─── Page principale Cartable ─────────────────────────────────────────────────
-export function CartablePage({ onGenerateFlashcards }: { onGenerateFlashcards?: (text: string, title: string) => void } = {}) {
+export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
+  onGenerateFlashcards?: (text: string, title: string, uaId: string) => void
+  onOpenFlashcardSet?: (set: FlashcardSet) => void
+} = {}) {
   const { user, profile } = useAuth()
   const hasAccess = profile?.role === 'superadmin' || ['pro', 'teacher'].includes(profile?.plan ?? '')
 
@@ -830,6 +834,7 @@ export function CartablePage({ onGenerateFlashcards }: { onGenerateFlashcards?: 
   const [speaking,     setSpeaking]     = useState(false)
   const [paused,       setPaused]       = useState(false)
   const [audioLoading, setAudioLoading] = useState(false)
+  const [checkingFlashcardsUA, setCheckingFlashcardsUA] = useState<string | null>(null)
   const [voice,        setVoice]        = useState<string>(() => localStorage.getItem('learni_tts_voice') || 'nova')
   const [audioDuration, setAudioDuration] = useState(0)
   const [audioTime,     setAudioTime]     = useState(0)
@@ -1282,12 +1287,24 @@ export function CartablePage({ onGenerateFlashcards }: { onGenerateFlashcards?: 
     setView('revision')
   }
 
-  const handleGenerateFlashcardsForUA = (ua: UA, e: React.MouseEvent) => {
+  const handleGenerateFlashcardsForUA = async (ua: UA, e: React.MouseEvent) => {
     e.stopPropagation()
-    const text = (ua.documents ?? []).map(d => d.text_content).join('\n\n').trim()
-    if (!text) return
-    const title = ua.label || unitTitle(activeCahier, ua.number)
-    onGenerateFlashcards?.(text, title)
+    const docs = ua.documents ?? []
+    if (docs.length === 0 || checkingFlashcardsUA) return
+
+    setCheckingFlashcardsUA(ua.id)
+    try {
+      const existing = await getFlashcardSetByUA(ua.id)
+      if (existing) {
+        onOpenFlashcardSet?.(existing)
+        return
+      }
+      const text = docs.map(d => d.text_content).join('\n\n').trim()
+      const title = ua.label || unitTitle(activeCahier, ua.number)
+      onGenerateFlashcards?.(text, title, ua.id)
+    } finally {
+      setCheckingFlashcardsUA(null)
+    }
   }
 
   if (!hasAccess) {
@@ -1811,16 +1828,18 @@ export function CartablePage({ onGenerateFlashcards }: { onGenerateFlashcards?: 
                     </button>
                     <button
                       onClick={e => handleGenerateFlashcardsForUA(ua, e)}
-                      disabled={(ua.documents?.length ?? 0) === 0}
-                      title="Générer des flashcards à partir de ce contenu"
+                      disabled={(ua.documents?.length ?? 0) === 0 || checkingFlashcardsUA === ua.id}
+                      title="Voir ou générer les flashcards de ce contenu"
                       style={{
                         padding: '5px 12px', borderRadius: 8,
                         background: (ua.documents?.length ?? 0) > 0 ? '#1a1033' : 'var(--bg3)',
                         border: '1px solid #4a3080', color: '#c4b5fd',
-                        fontSize: 12, fontWeight: 600, cursor: (ua.documents?.length ?? 0) > 0 ? 'pointer' : 'not-allowed',
+                        fontSize: 12, fontWeight: 600,
+                        cursor: (ua.documents?.length ?? 0) > 0 && checkingFlashcardsUA !== ua.id ? 'pointer' : 'not-allowed',
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
                       }}
                     >
-                      🗂️ Flashcards
+                      {checkingFlashcardsUA === ua.id ? <Loader size={12} className="spin" /> : '🗂️'} Flashcards
                     </button>
                     <button onClick={e => handleDeleteUA(ua, e)} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }}>
                       <Trash2 size={15} />

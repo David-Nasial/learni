@@ -24,7 +24,7 @@ import { HomeworkPage }      from './pages/HomeworkPage'
 import { StudentDashboard }   from './pages/StudentDashboard'
 import { OnboardingModal }    from './components/OnboardingModal'
 import { useLocalStorage }    from './hooks/useLocalStorage'
-import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan } from './utils/supabase'
+import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan, type FlashcardSet } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
   GenerateOptions, Question, WrittenGrade,
@@ -117,7 +117,9 @@ function AppInner() {
   const [finalAnswers, setFinalAnswers] = useState<(number | string | null)[]>([])
   const [writtenGrading, setWrittenGrading] = useState<Record<number, WrittenGrade>>({})
   const [genError, setGenError]         = useState('')
-  const [flashcardsPrefill, setFlashcardsPrefill] = useState<{ text: string; title: string } | null>(null)
+  const [flashcardsPrefill, setFlashcardsPrefill] = useState<
+    { mode: 'generate'; text: string; title: string; uaId?: string } | { mode: 'open'; set: FlashcardSet } | null
+  >(null)
 
   // Onboarding
   const [onboardingType, setOnboarding] = useState<'first' | Plan | null>(null)
@@ -378,7 +380,10 @@ function AppInner() {
         return <FlashcardsPage prefill={flashcardsPrefill} onConsumedPrefill={() => setFlashcardsPrefill(null)} />
 
       case 'cartable':
-        return <CartablePage onGenerateFlashcards={(text, title) => { setFlashcardsPrefill({ text, title }); navigate('flashcards') }} />
+        return <CartablePage
+          onGenerateFlashcards={(text, title, uaId) => { setFlashcardsPrefill({ mode: 'generate', text, title, uaId }); navigate('flashcards') }}
+          onOpenFlashcardSet={(set) => { setFlashcardsPrefill({ mode: 'open', set }); navigate('flashcards') }}
+        />
 
       case 'homework':
         return <HomeworkPage />
