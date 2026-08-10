@@ -1108,22 +1108,38 @@ export async function getUAAudioUrl(path: string): Promise<string> {
 // chacune) — jamais coupé, lu à la suite comme un livre audio en plusieurs parties.
 const AUDIO_CAPSULE_LEN = 40000
 
+// Découpe par tranches de taille FIXE, en cherchant seulement une coupure propre
+// à proximité (paragraphe → phrase → espace). Ne dépend pas de la structure du
+// texte : un PDF extrait sans vrais paragraphes donne quand même des capsules
+// régulières, au lieu d'une minuscule suivie d'une énorme.
 function splitIntoCapsules(text: string, maxLen = AUDIO_CAPSULE_LEN): string[] {
-  const paragraphs = text.split(/\n{2,}/)
+  const clean = text.trim()
+  if (clean.length <= maxLen) return [clean]
+
   const capsules: string[] = []
-  let current = ''
-  for (const raw of paragraphs) {
-    const para = raw.trim()
-    if (!para) continue
-    if (current && (current + '\n\n' + para).trim().length > maxLen) {
-      capsules.push(current.trim())
-      current = para
-    } else {
-      current = current ? `${current}\n\n${para}` : para
+  let pos = 0
+  // Fenêtre de recherche d'une coupure naturelle : jusqu'à 15 % avant la limite
+  const minCut = Math.floor(maxLen * 0.85)
+
+  while (pos < clean.length) {
+    if (clean.length - pos <= maxLen) { capsules.push(clean.slice(pos).trim()); break }
+
+    const window = clean.slice(pos, pos + maxLen)
+    let cut = window.lastIndexOf('\n\n')
+    if (cut < minCut) {
+      const sentence = Math.max(window.lastIndexOf('. '), window.lastIndexOf('.\n'))
+      cut = sentence >= minCut ? sentence + 1 : -1
     }
+    if (cut < minCut) {
+      const space = window.lastIndexOf(' ')
+      cut = space >= minCut ? space : maxLen
+    }
+
+    capsules.push(clean.slice(pos, pos + cut).trim())
+    pos += cut
   }
-  if (current) capsules.push(current.trim())
-  return capsules.length > 0 ? capsules : [text]
+
+  return capsules.filter(c => c.length > 0)
 }
 
 async function synthesizeCapsule(text: string, voice: string, language: 'fr' | 'en'): Promise<Blob> {

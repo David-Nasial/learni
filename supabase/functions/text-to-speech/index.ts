@@ -80,7 +80,14 @@ Réponds UNIQUEMENT avec le texte prêt à être lu à voix haute, sans commenta
       .map((b: { text: string }) => b.text)
       .join('')
       .trim()
-    return narration || text
+    if (!narration) return text
+
+    // Garde-fou : la réécriture doit reformuler, pas résumer. Si la sortie est
+    // nettement plus courte que l'entrée (réponse tronquée, condensée, ou refus),
+    // on lit le texte d'origine — mieux vaut une lecture brute que du contenu perdu.
+    if (narration.length < text.length * 0.6) return text
+
+    return narration
   } catch {
     return text
   }
