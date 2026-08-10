@@ -10,6 +10,12 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const DEFAULT_VOICE = 'nova'
 const VALID_VOICES = new Set(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'])
 const MAX_CHUNK = 3900
+// Chaque segment part dans son propre appel Claude (en parallèle) — reste large
+// (~7000 car.) tout en gardant la sortie très en-dessous de sa limite de 8192 tokens.
+const NARRATION_SEGMENT_LEN = 7000
+// Plafond de sécurité global (~60-90 min de narration) pour couvrir un livre complet
+// sans dépasser le temps d'exécution ni le coût d'une génération.
+const MAX_TOTAL_LEN = 100000
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  Deno.env.get('ALLOWED_ORIGIN') ?? '*',
@@ -80,6 +86,28 @@ Réponds UNIQUEMENT avec le texte prêt à être lu à voix haute, sans commenta
   }
 }
 
+// Découpe un long texte en segments (par paragraphes) pour que chacun tienne
+// largement sous la limite de sortie d'un appel Claude — sans jamais couper le livre.
+function splitIntoSegments(text: string, maxLen = NARRATION_SEGMENT_LEN): string[] {
+  const paragraphs = text.split(/\n{2,}/)
+  const segments: string[] = []
+  let current = ''
+
+  for (const raw of paragraphs) {
+    const para = raw.trim()
+    if (!para) continue
+    if ((current + '\n\n' + para).trim().length > maxLen) {
+      if (current) segments.push(current.trim())
+      current = para.length > maxLen ? para.slice(0, maxLen) : para
+    } else {
+      current = current ? `${current}\n\n${para}` : para
+    }
+  }
+  if (current) segments.push(current.trim())
+
+  return segments.length > 0 ? segments : [text]
+}
+
 function chunkText(text: string, maxLen = MAX_CHUNK): string[] {
   const paragraphs = text.split(/\n{2,}/)
   const chunks: string[] = []
@@ -145,11 +173,16 @@ serve(async (req) => {
     }
     const voice = VALID_VOICES.has(requestedVoice) ? requestedVoice : DEFAULT_VOICE
 
-    // Plafond raisonnable (~15-20 min de lecture) pour rester sous les limites
-    // de temps d'exécution et de coût par génération.
-    const basicClean = cleanForSpeech(text.trim()).slice(0, 25000)
-    const narrated    = await prepareForNarration(basicClean, language === 'en' ? 'en' : 'fr')
-    const chunks       = chunkText(narrated)
+    const basicClean = cleanForSpeech(text.trim()).slice(0, MAX_TOTAL_LEN)
+    const lang = language === 'en' ? 'en' : 'fr'
+
+    // Le livre entier est découpé en segments préparés EN PARALLÈLE (jamais coupé) —
+    // chaque segment reste sous la limite de sortie d'un appel Claude.
+    const segments = splitIntoSegments(basicClean)
+    const narratedSegments = await Promise.all(segments.map(seg => prepareForNarration(seg, lang)))
+    const narrated = narratedSegments.join('\n\n')
+
+    const chunks = chunkText(narrated)
     // Synthétiser tous les morceaux EN PARALLÈLE plutôt qu'un par un — un
     // document en plusieurs chunks dépassait sinon le temps d'exécution max.
     const buffers = await Promise.all(chunks.map(chunk => synthesizeChunk(chunk, voice)))

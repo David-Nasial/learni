@@ -895,11 +895,14 @@ export interface UA {
   rewritten_content?: string | null
   rewritten_comments?: Record<string, string> | null
   content_generated_at?: string | null
-  audio_path?: string | null
   audio_language?: string | null
   audio_voice?: string | null
-  audio_markers?: number[] | null
+  audio_parts?: AudioPart[] | null
+  audio_markers?: AudioMarker[] | null
 }
+
+export interface AudioPart { path: string }
+export interface AudioMarker { part: number; time: number }
 
 export interface CartableDocument {
   id: string
@@ -1101,11 +1104,29 @@ export async function getUAAudioUrl(path: string): Promise<string> {
   return data.signedUrl
 }
 
-// Génère l'audio via OpenAI TTS, le met en cache dans Storage, et retourne une
-// URL de lecture. Un même UA + langue n'est synthétisé qu'une seule fois.
-export async function generateUAAudio(
-  uaId: string, userId: string, text: string, language: 'fr' | 'en', voice = 'nova'
-): Promise<string> {
+// Un livre long est découpé en capsules d'environ 40 000 caractères (~25-30 min
+// chacune) — jamais coupé, lu à la suite comme un livre audio en plusieurs parties.
+const AUDIO_CAPSULE_LEN = 40000
+
+function splitIntoCapsules(text: string, maxLen = AUDIO_CAPSULE_LEN): string[] {
+  const paragraphs = text.split(/\n{2,}/)
+  const capsules: string[] = []
+  let current = ''
+  for (const raw of paragraphs) {
+    const para = raw.trim()
+    if (!para) continue
+    if (current && (current + '\n\n' + para).trim().length > maxLen) {
+      capsules.push(current.trim())
+      current = para
+    } else {
+      current = current ? `${current}\n\n${para}` : para
+    }
+  }
+  if (current) capsules.push(current.trim())
+  return capsules.length > 0 ? capsules : [text]
+}
+
+async function synthesizeCapsule(text: string, voice: string, language: 'fr' | 'en'): Promise<Blob> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
 
@@ -1125,22 +1146,35 @@ export async function generateUAAudio(
     const err = await response.json().catch(() => ({})) as { error?: string }
     throw new Error(err.error ?? `Erreur serveur: ${response.status}`)
   }
-  const blob = await response.blob()
-
-  const path = `${userId}/${uaId}-${language}-${voice}.mp3`
-  const { error: uploadError } = await supabase.storage
-    .from('cartable-audio')
-    .upload(path, blob, { contentType: 'audio/mpeg', upsert: true })
-  if (uploadError) throw new Error(uploadError.message)
-
-  await supabase.from('cartable_uas')
-    .update({ audio_path: path, audio_language: language, audio_voice: voice })
-    .eq('id', uaId)
-
-  return getUAAudioUrl(path)
+  return response.blob()
 }
 
-export async function updateUAAudioMarkers(uaId: string, markers: number[]): Promise<void> {
+// Génère l'audio (en une ou plusieurs capsules) via OpenAI TTS, le met en cache
+// dans Storage, et retourne les chemins. Un même UA + langue + voix n'est
+// synthétisé qu'une seule fois.
+export async function generateUAAudioParts(
+  uaId: string, userId: string, text: string, language: 'fr' | 'en', voice = 'nova'
+): Promise<AudioPart[]> {
+  const capsules = splitIntoCapsules(text)
+
+  const parts = await Promise.all(capsules.map(async (capsuleText, i) => {
+    const blob = await synthesizeCapsule(capsuleText, voice, language)
+    const path = `${userId}/${uaId}-${language}-${voice}-part${i}.mp3`
+    const { error: uploadError } = await supabase.storage
+      .from('cartable-audio')
+      .upload(path, blob, { contentType: 'audio/mpeg', upsert: true })
+    if (uploadError) throw new Error(uploadError.message)
+    return { path }
+  }))
+
+  await supabase.from('cartable_uas')
+    .update({ audio_parts: parts, audio_language: language, audio_voice: voice, audio_markers: [] })
+    .eq('id', uaId)
+
+  return parts
+}
+
+export async function updateUAAudioMarkers(uaId: string, markers: AudioMarker[]): Promise<void> {
   const { error } = await supabase.from('cartable_uas').update({ audio_markers: markers }).eq('id', uaId)
   if (error) throw new Error(error.message)
 }

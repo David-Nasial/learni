@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Trash2, Upload, ChevronLeft, BookOpen, FileText, Loader,
+import { Plus, Trash2, Upload, ChevronLeft, ChevronRight, BookOpen, FileText, Loader,
          GraduationCap, AlertTriangle, CheckCircle, XCircle, RefreshCw, RotateCcw,
          Volume2, Pause, Play, StopCircle, Library, ChevronDown, ChevronUp,
          MessageCircle, Send, X, PenLine, Rewind, FastForward, Bookmark } from 'lucide-react'
@@ -8,8 +8,8 @@ import {
   getUAs, createUA, deleteUA,
   getDocuments, uploadDocument, deleteDocument,
   generateRevision, generateCahierSummary, generateUASummary, generateUARewrite,
-  callTutor, getUANotes, addUANote, deleteUANote, generateUAAudio, getUAAudioUrl, updateUAAudioMarkers,
-  getFlashcardSetByUA, type FlashcardSet,
+  callTutor, getUANotes, addUANote, deleteUANote, generateUAAudioParts, getUAAudioUrl, updateUAAudioMarkers,
+  getFlashcardSetByUA, type FlashcardSet, type AudioPart, type AudioMarker,
   type Cahier, type UA, type CartableDocument, type RevisionExercise, type RevisionResult,
   type CartableUnitLabel, type UANote,
 } from '../utils/supabase'
@@ -831,6 +831,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   const readContentRef = useRef<HTMLDivElement>(null)
 
   // Lecture audio — voix IA (OpenAI TTS, Pro/Autodidacte/Enseignant) ou voix du navigateur (repli)
+  // Un livre long est en plusieurs capsules ("Partie 1, 2, 3…") lues à la suite automatiquement.
   const [speaking,     setSpeaking]     = useState(false)
   const [paused,       setPaused]       = useState(false)
   const [audioLoading, setAudioLoading] = useState(false)
@@ -839,7 +840,9 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   const [audioDuration, setAudioDuration] = useState(0)
   const [audioTime,     setAudioTime]     = useState(0)
   const [audioLevels,   setAudioLevels]   = useState<number[]>(new Array(24).fill(4))
-  const [markers,       setMarkers]       = useState<number[]>([])
+  const [markers,       setMarkers]       = useState<AudioMarker[]>([])
+  const [audioParts,    setAudioParts]    = useState<AudioPart[]>([])
+  const [currentPart,   setCurrentPart]   = useState(0)
   const audioElRef = useRef<HTMLAudioElement | null>(null)
   const rafRef      = useRef<number>(0)
   // Verrou synchrone (contrairement à l'état React) pour empêcher un double-clic
@@ -847,6 +850,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   const audioLoadingRef = useRef(false)
 
   const hasAIVoice = profile?.role === 'superadmin' || profile?.plan === 'pro' || profile?.plan === 'autodidacte' || profile?.plan === 'teacher'
+  const currentMarkers = markers.filter(m => m.part === currentPart)
 
   // Visualiseur — animation simulée (pas branchée sur le circuit audio réel).
   // Volontaire : rediriger la sortie d'un <audio> à travers l'API Web Audio
@@ -884,13 +888,23 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     localStorage.setItem('learni_tts_voice', v)
   }
 
-  const playAudioUrl = async (url: string) => {
+  // Joue une capsule précise — enchaîne automatiquement sur la suivante à la fin (comme un livre audio)
+  const playPart = async (parts: AudioPart[], index: number) => {
+    const url = await getUAAudioUrl(parts[index].path)
     const audioEl = new Audio(url)
     audioEl.addEventListener('loadedmetadata', () => setAudioDuration(audioEl.duration || 0))
     audioEl.addEventListener('timeupdate', () => setAudioTime(audioEl.currentTime))
-    audioEl.onended = () => { setSpeaking(false); setPaused(false); stopVisualizer() }
+    audioEl.onended = () => {
+      if (index + 1 < parts.length) {
+        setCurrentPart(index + 1)
+        playPart(parts, index + 1).catch(() => setError('Impossible de lire l\'audio.'))
+      } else {
+        setSpeaking(false); setPaused(false); stopVisualizer()
+      }
+    }
     audioEl.onerror = () => { setSpeaking(false); setPaused(false); stopVisualizer(); setError('Impossible de lire l\'audio.') }
     audioElRef.current = audioEl
+    setAudioTime(0)
     await audioEl.play()
     startVisualizer()
     setSpeaking(true)
@@ -904,20 +918,23 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     audioLoadingRef.current = true
     setAudioLoading(true); setError('')
     try {
-      let url: string
-      if (!forceRegenerate && activeUA.audio_path && activeUA.audio_language === revLang && activeUA.audio_voice === voice) {
-        url = await getUAAudioUrl(activeUA.audio_path)
+      let parts: AudioPart[]
+      const cached = !!activeUA.audio_parts?.length && activeUA.audio_language === revLang && activeUA.audio_voice === voice
+      if (!forceRegenerate && cached) {
+        parts = activeUA.audio_parts!
+        setMarkers(activeUA.audio_markers ?? [])
       } else {
         const text = documents.map(d => d.text_content).join('\n\n').trim()
         if (!text) return
-        url = await generateUAAudio(activeUA.id, user.id, text, revLang, voice)
-        const path = `${user.id}/${activeUA.id}-${revLang}-${voice}.mp3`
-        const apply = (u: UA) => u.id === activeUA.id ? { ...u, audio_path: path, audio_language: revLang, audio_voice: voice } : u
+        parts = await generateUAAudioParts(activeUA.id, user.id, text, revLang, voice)
+        const apply = (u: UA) => u.id === activeUA.id ? { ...u, audio_parts: parts, audio_language: revLang, audio_voice: voice, audio_markers: [] } : u
         setActiveUA(u => u ? apply(u) : u)
         setUAs(prev => prev.map(apply))
+        setMarkers([])
       }
-      setMarkers(activeUA.audio_markers ?? [])
-      await playAudioUrl(url)
+      setAudioParts(parts)
+      setCurrentPart(0)
+      await playPart(parts, 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de générer l\'audio.')
     } finally {
@@ -974,17 +991,24 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     handleSeekTo(Math.min(Math.max(0, audioElRef.current.currentTime + delta), audioDuration))
   }
 
+  // Navigation manuelle entre capsules
+  const goToPart = async (index: number) => {
+    if (index < 0 || index >= audioParts.length || audioLoadingRef.current) return
+    setCurrentPart(index)
+    try { await playPart(audioParts, index) } catch { setError('Impossible de lire l\'audio.') }
+  }
+
   const handleAddMarker = async () => {
     if (!audioElRef.current || !activeUA) return
     const t = Math.floor(audioElRef.current.currentTime)
-    if (markers.includes(t)) return
-    const updated = [...markers, t].sort((a, b) => a - b)
+    if (currentMarkers.some(m => m.time === t)) return
+    const updated = [...markers, { part: currentPart, time: t }].sort((a, b) => a.part - b.part || a.time - b.time)
     setMarkers(updated)
     try { await updateUAAudioMarkers(activeUA.id, updated) } catch { /* pas critique */ }
   }
 
   const handleRemoveMarker = async (t: number) => {
-    const updated = markers.filter(m => m !== t)
+    const updated = markers.filter(m => !(m.part === currentPart && m.time === t))
     setMarkers(updated)
     if (activeUA) { try { await updateUAAudioMarkers(activeUA.id, updated) } catch { /* pas critique */ } }
   }
@@ -1030,6 +1054,8 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     const docs = ua.documents ?? await getDocuments(ua.id)
     setDocuments(docs)
     setMarkers(ua.audio_markers ?? [])
+    setAudioParts([])
+    setCurrentPart(0)
     setAudioDuration(0)
     setAudioTime(0)
     setView('ua')
@@ -1524,7 +1550,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
                 <StopCircle size={15} /> Arrêter
               </button>
             )}
-            {hasAIVoice && activeUA.audio_path && !audioLoading && (
+            {hasAIVoice && !!activeUA.audio_parts?.length && !audioLoading && (
               <button
                 onClick={handleRegenerateAudio}
                 title="Régénérer l'audio (nouvelle synthèse, remplace la version en cache)"
@@ -1553,9 +1579,32 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
           </div>
         </div>
 
-        {/* Lecteur audio IA — visualiseur, progression, avance/recul, repères */}
+        {/* Lecteur audio IA — visualiseur, progression, avance/recul, repères, capsules */}
         {hasAIVoice && (speaking || paused) && (
           <div style={{ background: 'var(--bg2)', border: '1px solid #4a3080', borderRadius: 14, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+            {audioParts.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
+                <button
+                  onClick={() => goToPart(currentPart - 1)}
+                  disabled={currentPart === 0}
+                  title="Partie précédente"
+                  style={{ background: 'none', border: 'none', color: currentPart === 0 ? '#555' : '#a78bfa', cursor: currentPart === 0 ? 'not-allowed' : 'pointer', padding: 4, display: 'flex' }}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span style={{ fontSize: 12, color: '#a78bfa', fontWeight: 600 }}>
+                  Partie {currentPart + 1} / {audioParts.length}
+                </span>
+                <button
+                  onClick={() => goToPart(currentPart + 1)}
+                  disabled={currentPart === audioParts.length - 1}
+                  title="Partie suivante"
+                  style={{ background: 'none', border: 'none', color: currentPart === audioParts.length - 1 ? '#555' : '#a78bfa', cursor: currentPart === audioParts.length - 1 ? 'not-allowed' : 'pointer', padding: 4, display: 'flex' }}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
             {/* Visualiseur type dictaphone */}
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3, height: 40, marginBottom: 12 }}>
               {audioLevels.map((lvl, i) => (
@@ -1575,13 +1624,13 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
                 onChange={e => handleSeekTo(Number(e.target.value))}
                 style={{ width: '100%', accentColor: '#a78bfa', display: 'block' }}
               />
-              {markers.map(t => (
+              {currentMarkers.map(m => (
                 <div
-                  key={t}
-                  onClick={() => handleSeekTo(t)}
-                  title={formatTime(t)}
+                  key={m.time}
+                  onClick={() => handleSeekTo(m.time)}
+                  title={formatTime(m.time)}
                   style={{
-                    position: 'absolute', top: 8, left: `${audioDuration ? (t / audioDuration) * 100 : 0}%`,
+                    position: 'absolute', top: 8, left: `${audioDuration ? (m.time / audioDuration) * 100 : 0}%`,
                     width: 2, height: 8, background: '#f5a623', cursor: 'pointer', pointerEvents: 'auto',
                   }}
                 />
@@ -1614,18 +1663,18 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
               </button>
             </div>
 
-            {/* Liste des repères */}
-            {markers.length > 0 && (
+            {/* Liste des repères (de la partie en cours) */}
+            {currentMarkers.length > 0 && (
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, justifyContent: 'center' }}>
-                {markers.map(t => (
-                  <span key={t} style={{
+                {currentMarkers.map(m => (
+                  <span key={m.time} style={{
                     display: 'flex', alignItems: 'center', gap: 4, padding: '3px 4px 3px 10px',
                     borderRadius: 20, background: '#2a1f00', color: '#f5a623', fontSize: 11,
                   }}>
-                    <button onClick={() => handleSeekTo(t)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11 }}>
-                      🔖 {formatTime(t)}
+                    <button onClick={() => handleSeekTo(m.time)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 11 }}>
+                      🔖 {formatTime(m.time)}
                     </button>
-                    <button onClick={() => handleRemoveMarker(t)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 3, display: 'flex' }}>
+                    <button onClick={() => handleRemoveMarker(m.time)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 3, display: 'flex' }}>
                       <X size={10} />
                     </button>
                   </span>
