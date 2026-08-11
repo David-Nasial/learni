@@ -1038,6 +1038,47 @@ export async function generateRevision(
   return data as RevisionResult
 }
 
+// ─── Cartable — cache des séries de révision ─────────────────────────────────
+// Une série reste disponible telle quelle tant que l'élève ne demande pas
+// explicitement une "Nouvelle série" — évite de régénérer (et refacturer) à
+// chaque clic sur "Réviser".
+
+// `ua_id` reste NULL pour l'examen final (couvre tout le cahier).
+function revisionCacheFilter(
+  query: ReturnType<ReturnType<typeof supabase.from>['select']>,
+  cahierId: string, uaId: string | null, mode: 'ua' | 'final', language: 'fr' | 'en'
+) {
+  const q = query.eq('cahier_id', cahierId).eq('mode', mode).eq('language', language)
+  return uaId ? q.eq('ua_id', uaId) : q.is('ua_id', null)
+}
+
+export async function getCachedRevision(
+  cahierId: string, uaId: string | null, mode: 'ua' | 'final', language: 'fr' | 'en'
+): Promise<RevisionResult | null> {
+  const { data, error } = await revisionCacheFilter(
+    supabase.from('cartable_revision_cache').select('result'),
+    cahierId, uaId, mode, language,
+  ).maybeSingle()
+  if (error || !data) return null
+  return (data as { result: RevisionResult }).result
+}
+
+export async function saveCachedRevision(
+  userId: string, cahierId: string, uaId: string | null,
+  mode: 'ua' | 'final', language: 'fr' | 'en', result: RevisionResult
+): Promise<void> {
+  // Remplacement explicite plutôt qu'un upsert : la clé inclut une colonne
+  // pouvant être NULL, que `onConflict` ne sait pas cibler correctement.
+  await revisionCacheFilter(
+    supabase.from('cartable_revision_cache').delete() as never,
+    cahierId, uaId, mode, language,
+  )
+  await supabase.from('cartable_revision_cache').insert({
+    user_id: userId, cahier_id: cahierId, ua_id: uaId,
+    mode, language, result,
+  })
+}
+
 // ─── Cartable — résumés & cours réécrit (générés à la demande, mis en cache) ──
 
 async function callCartableEnrich(body: Record<string, unknown>): Promise<Record<string, unknown>> {

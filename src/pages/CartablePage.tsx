@@ -7,7 +7,8 @@ import {
   getCahiers, createCahier, deleteCahier,
   getUAs, createUA, deleteUA,
   getDocuments, uploadDocument, deleteDocument,
-  generateRevision, generateCahierSummary, generateUASummary, generateUARewrite,
+  generateRevision, getCachedRevision, saveCachedRevision,
+  generateCahierSummary, generateUASummary, generateUARewrite,
   callTutor, getUANotes, addUANote, deleteUANote, generateUAAudioParts, getUAAudioUrl, updateUAAudioMarkers,
   getFlashcardSetByUA, type FlashcardSet, type AudioPart, type AudioMarker,
   type Cahier, type UA, type CartableDocument, type RevisionExercise, type RevisionResult,
@@ -535,11 +536,12 @@ function ExerciseCorrection({ exercise, selected, onNext }: {
 }
 
 // ─── Vue révision ─────────────────────────────────────────────────────────────
-function RevisionView({ cahier, targetUA, mode, lang, onBack }: {
+function RevisionView({ cahier, targetUA, mode, lang, userId, onBack }: {
   cahier: Cahier
   targetUA: UA | null
   mode: RevMode
   lang: Lang
+  userId?: string
   onBack: () => void
 }) {
   const [result,    setResult]    = useState<RevisionResult | null>(null)
@@ -553,9 +555,22 @@ function RevisionView({ cahier, targetUA, mode, lang, onBack }: {
   const [done,      setDone]      = useState(false)
   const [allSeen,   setAllSeen]   = useState<{ question: string }[]>([])
 
-  const fetchRevision = useCallback(async (existing: { question: string }[] = []) => {
+  // `useCache` : à l'ouverture, on réutilise la dernière série déjà générée —
+  // seul "Nouvelle série" relance (et refacture) une génération.
+  const fetchRevision = useCallback(async (existing: { question: string }[] = [], useCache = false) => {
     setLoading(true); setError('')
     try {
+      const uaId = mode === 'ua' ? targetUA?.id ?? null : null
+
+      if (useCache) {
+        const cached = await getCachedRevision(cahier.id, uaId, mode, lang)
+        if (cached) {
+          setResult(cached)
+          setExIdx(0); setSelected(null); setConfirmed(false); setDone(false)
+          return
+        }
+      }
+
       const uas = cahier.uas ?? []
       const targetUAs = mode === 'ua' && targetUA
         ? uas.filter(u => u.id === targetUA.id)
@@ -570,14 +585,15 @@ function RevisionView({ cahier, targetUA, mode, lang, onBack }: {
       const res = await generateRevision(mode, cahier.name, uaData, 10, lang, existing, cahier.unit_label)
       setResult(res)
       setExIdx(0); setSelected(null); setConfirmed(false); setDone(false)
+      if (userId) saveCachedRevision(userId, cahier.id, uaId, mode, lang, res).catch(() => {})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur lors de la génération.')
     } finally {
       setLoading(false)
     }
-  }, [cahier, targetUA, mode, lang])
+  }, [cahier, targetUA, mode, lang, userId])
 
-  useEffect(() => { fetchRevision() }, [fetchRevision])
+  useEffect(() => { fetchRevision([], true) }, [fetchRevision])
 
   const handleConfirm = () => {
     if (selected === null || !result) return
@@ -1385,6 +1401,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
         targetUA={revTargetUA}
         mode={revMode}
         lang={revLang}
+        userId={user?.id}
         onBack={() => setView('cahier')}
       />
     )
