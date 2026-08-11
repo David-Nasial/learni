@@ -1280,7 +1280,12 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     setUAs(prev => prev.map(apply))
     setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).map(apply) } : c)
     setActiveUA(u => u && u.id === uaId ? apply(u) : u)
-    // La série de révision en cache porte sur l'ancien contenu — on la jette.
+  }
+
+  // Appelé uniquement après un AJOUT : la série en cache ne couvre pas le nouveau
+  // contenu, la prochaine ouverture doit donc en générer une à jour. Après une
+  // suppression, on garde la série existante — l'élève a "Nouvelle série" s'il la veut.
+  const dropCachedRevisionAfterAdd = (uaId: string) => {
     if (activeCahier) invalidateRevisionCache(activeCahier.id, uaId).catch(() => {})
   }
 
@@ -1318,6 +1323,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       const doc = await uploadDocument(targetUA.id, user.id, file.name, text, file.size)
       const updatedUA = { ...targetUA, documents: [...(targetUA.documents ?? []), doc] }
       applyUADocuments(updatedUA.id, docs => [...docs, doc])
+      dropCachedRevisionAfterAdd(updatedUA.id)
       mergeNewContentIntoSummary(text)
       await openUA(updatedUA)
     } catch (err) {
@@ -1342,7 +1348,6 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     await deleteUA(ua.id)
     setUAs(prev => prev.filter(u => u.id !== ua.id))
     setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).filter(u => u.id !== ua.id) } : c)
-    if (activeCahier) invalidateRevisionCache(activeCahier.id, ua.id).catch(() => {})
   }
 
   // Téléverser document dans l'UA active
@@ -1354,6 +1359,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       const doc  = await uploadDocument(activeUA.id, user.id, file.name, text, file.size)
       setDocuments(prev => [...prev, doc])
       applyUADocuments(activeUA.id, docs => [...docs, doc])
+      dropCachedRevisionAfterAdd(activeUA.id)
       mergeNewContentIntoSummary(text)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de lire ce fichier.')
@@ -1382,7 +1388,10 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       setProcessingPhotos(false)
       setPhotoProgress({ current: 0, total: 0 })
       // Une seule fusion pour toutes les photos ajoutées, pas une par photo.
-      if (addedTexts.length) mergeNewContentIntoSummary(addedTexts.join('\n\n'))
+      if (addedTexts.length) {
+        dropCachedRevisionAfterAdd(activeUA.id)
+        mergeNewContentIntoSummary(addedTexts.join('\n\n'))
+      }
     }
   }, [activeUA, user, mergeNewContentIntoSummary])
 
