@@ -1063,6 +1063,18 @@ export async function getCachedRevision(
   return (data as { result: RevisionResult }).result
 }
 
+// À appeler dès que le contenu d'une UA change : la série en cache a été
+// générée à partir de l'ancien contenu et ne doit plus être resservie.
+// Invalide aussi l'examen final, qui couvre tout le cahier.
+export async function invalidateRevisionCache(cahierId: string, uaId?: string | null): Promise<void> {
+  if (uaId) {
+    await supabase.from('cartable_revision_cache').delete()
+      .eq('cahier_id', cahierId).eq('ua_id', uaId)
+  }
+  await supabase.from('cartable_revision_cache').delete()
+    .eq('cahier_id', cahierId).eq('mode', 'final')
+}
+
 export async function saveCachedRevision(
   userId: string, cahierId: string, uaId: string | null,
   mode: 'ua' | 'final', language: 'fr' | 'en', result: RevisionResult

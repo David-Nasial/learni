@@ -7,7 +7,7 @@ import {
   getCahiers, createCahier, deleteCahier,
   getUAs, createUA, deleteUA,
   getDocuments, uploadDocument, deleteDocument,
-  generateRevision, getCachedRevision, saveCachedRevision,
+  generateRevision, getCachedRevision, saveCachedRevision, invalidateRevisionCache,
   generateCahierSummary, mergeCahierSummary, generateUASummary, generateUARewrite,
   callTutor, getUANotes, addUANote, deleteUANote, generateUAAudioParts, getUAAudioUrl, updateUAAudioMarkers,
   getFlashcardSetByUA, type FlashcardSet, type AudioPart, type AudioMarker,
@@ -1272,6 +1272,18 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     finally { setCreatingUA(false) }
   }
 
+  // La liste des documents d'une UA existe en trois copies (`uas`, `activeCahier.uas`
+  // et `activeUA`) — les trois doivent bouger ensemble, sinon la révision se génère
+  // à partir d'un contenu périmé et les compteurs affichés sont faux.
+  const applyUADocuments = (uaId: string, updater: (docs: CartableDocument[]) => CartableDocument[]) => {
+    const apply = (u: UA) => u.id === uaId ? { ...u, documents: updater(u.documents ?? []) } : u
+    setUAs(prev => prev.map(apply))
+    setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).map(apply) } : c)
+    setActiveUA(u => u && u.id === uaId ? apply(u) : u)
+    // La série de révision en cache porte sur l'ancien contenu — on la jette.
+    if (activeCahier) invalidateRevisionCache(activeCahier.id, uaId).catch(() => {})
+  }
+
   // Téléverser le cours complet en un seul document (crée/réutilise une UA dédiée)
   const FULL_COURSE_LABEL = 'Cours complet'
   // Après un ajout de document : intègre le nouveau contenu au résumé général.
@@ -1305,8 +1317,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       }
       const doc = await uploadDocument(targetUA.id, user.id, file.name, text, file.size)
       const updatedUA = { ...targetUA, documents: [...(targetUA.documents ?? []), doc] }
-      setUAs(prev => prev.map(u => u.id === updatedUA.id ? updatedUA : u))
-      setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).map(u => u.id === updatedUA.id ? updatedUA : u) } : c)
+      applyUADocuments(updatedUA.id, docs => [...docs, doc])
       mergeNewContentIntoSummary(text)
       await openUA(updatedUA)
     } catch (err) {
@@ -1330,6 +1341,8 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     if (!confirm(`Supprimer ${unitTitle(activeCahier, ua.number)} et tous ses documents ?`)) return
     await deleteUA(ua.id)
     setUAs(prev => prev.filter(u => u.id !== ua.id))
+    setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).filter(u => u.id !== ua.id) } : c)
+    if (activeCahier) invalidateRevisionCache(activeCahier.id, ua.id).catch(() => {})
   }
 
   // Téléverser document dans l'UA active
@@ -1340,8 +1353,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       const text = await extractText(file)
       const doc  = await uploadDocument(activeUA.id, user.id, file.name, text, file.size)
       setDocuments(prev => [...prev, doc])
-      // Mettre à jour l'UA dans la liste
-      setUAs(prev => prev.map(u => u.id === activeUA.id ? { ...u, documents: [...(u.documents ?? []), doc] } : u))
+      applyUADocuments(activeUA.id, docs => [...docs, doc])
       mergeNewContentIntoSummary(text)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de lire ce fichier.')
@@ -1362,7 +1374,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
         const doc  = await uploadDocument(activeUA.id, user.id, file.name || `Photo ${i + 1}`, text, file.size)
         addedTexts.push(text)
         setDocuments(prev => [...prev, doc])
-        setUAs(prev => prev.map(u => u.id === activeUA.id ? { ...u, documents: [...(u.documents ?? []), doc] } : u))
+        applyUADocuments(activeUA.id, docs => [...docs, doc])
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de traiter une des photos.')
@@ -1378,6 +1390,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     if (!confirm('Supprimer ce document ?')) return
     await deleteDocument(docId)
     setDocuments(prev => prev.filter(d => d.id !== docId))
+    if (activeUA) applyUADocuments(activeUA.id, docs => docs.filter(d => d.id !== docId))
   }
 
   // Lancer révision
