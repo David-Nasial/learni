@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, Upload, ChevronLeft, ChevronRight, BookOpen, FileText, Loader,
          GraduationCap, AlertTriangle, CheckCircle, XCircle, RefreshCw, RotateCcw,
          Volume2, Pause, Play, StopCircle, Library, ChevronDown, ChevronUp,
-         MessageCircle, Send, X, PenLine, Rewind, FastForward, Bookmark } from 'lucide-react'
+         MessageCircle, Send, X, PenLine, Rewind, FastForward, Bookmark, Sparkles } from 'lucide-react'
 import {
   getCahiers, createCahier, deleteCahier,
   getUAs, createUA, deleteUA,
@@ -1109,36 +1109,31 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     setView('ua')
   }
 
-  // Résumé du cahier entier — généré une seule fois à la première ouverture, puis mis en cache
-  useEffect(() => {
-    if (view !== 'cahier' || !activeCahier) return
-    if (activeCahier.summary_points && activeCahier.summary_points.length > 0) return
-    const totalDocs = uas.reduce((a, u) => a + (u.documents?.length ?? 0), 0)
-    if (totalDocs === 0) return
-
-    setCahierSummaryLoading(true)
+  // Résumé du cahier entier — généré sur demande (bouton), jamais automatiquement.
+  // Volontaire : l'élève choisit le moment, et peut réactualiser après avoir
+  // ajouté un chapitre (sinon le résumé en cache resterait celui d'avant).
+  const handleGenerateCahierSummary = async () => {
+    if (!activeCahier || cahierSummaryLoading) return
     const content = uas
-      .flatMap(u => (u.documents ?? []).map(d => `=== UA${u.number}${u.label ? ` — ${u.label}` : ''} ===\n${d.text_content}`))
+      .flatMap(u => (u.documents ?? []).map(d => `=== ${unitTitle(activeCahier, u.number)}${u.label ? ` — ${u.label}` : ''} ===\n${d.text_content}`))
       .join('\n\n')
+    if (!content.trim()) return
 
-    generateCahierSummary(activeCahier.id, activeCahier.name, content, revLang)
-      .then(points => {
-        setActiveCahier(c => c ? { ...c, summary_points: points } : c)
-        setCahiers(prev => prev.map(c => c.id === activeCahier.id ? { ...c, summary_points: points } : c))
-      })
-      .catch(() => {})
-      .finally(() => setCahierSummaryLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, activeCahier?.id])
+    setCahierSummaryLoading(true); setError('')
+    try {
+      const points = await generateCahierSummary(activeCahier.id, activeCahier.name, content, revLang)
+      setActiveCahier(c => c ? { ...c, summary_points: points } : c)
+      setCahiers(prev => prev.map(c => c.id === activeCahier.id ? { ...c, summary_points: points } : c))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossible de générer le résumé.')
+    } finally {
+      setCahierSummaryLoading(false)
+    }
+  }
 
-  // Résumé d'une UA — généré à la première expansion de son accordéon
-  const toggleUASummary = (ua: UA) => {
-    const willOpen = expandedUA !== ua.id
-    setExpandedUA(willOpen ? ua.id : null)
-    if (!willOpen) return
-    if (ua.summary_points && ua.summary_points.length > 0) return
+  const generateSummaryForUA = (ua: UA) => {
     const docs = ua.documents ?? []
-    if (docs.length === 0) return
+    if (docs.length === 0 || uaSummaryLoading[ua.id]) return
 
     setUaSummaryLoading(prev => ({ ...prev, [ua.id]: true }))
     const content = docs.map(d => d.text_content).join('\n\n')
@@ -1150,6 +1145,15 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       })
       .catch(() => {})
       .finally(() => setUaSummaryLoading(prev => ({ ...prev, [ua.id]: false })))
+  }
+
+  // Résumé d'une UA — généré à la première expansion de son accordéon
+  const toggleUASummary = (ua: UA) => {
+    const willOpen = expandedUA !== ua.id
+    setExpandedUA(willOpen ? ua.id : null)
+    if (!willOpen) return
+    if (ua.summary_points && ua.summary_points.length > 0) return
+    generateSummaryForUA(ua)
   }
 
   // Page de lecture — cours réécrit par l'IA avec annotations, généré à la première ouverture
@@ -2041,14 +2045,32 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 12.5 }}>
                   <Loader size={14} className="spin" /> Génération du résumé…
                 </div>
-              ) : activeCahier.summary_points && activeCahier.summary_points.length > 0 ? (
-                <ul style={{ margin: 0, paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {activeCahier.summary_points.map((pt, i) => (
-                    <li key={i} style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.55 }}>{pt}</li>
-                  ))}
-                </ul>
               ) : (
-                <p style={{ color: 'var(--muted)', fontSize: 12.5 }}>Résumé indisponible.</p>
+                <>
+                  {activeCahier.summary_points && activeCahier.summary_points.length > 0 && (
+                    <ul style={{ margin: '0 0 .75rem', paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {activeCahier.summary_points.map((pt, i) => (
+                        <li key={i} style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.55 }}>{pt}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <button
+                    onClick={handleGenerateCahierSummary}
+                    title={activeCahier.summary_points?.length
+                      ? 'Régénère le résumé en tenant compte des documents ajoutés depuis'
+                      : undefined}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+                      background: activeCahier.summary_points?.length ? 'transparent' : '#2d1b69',
+                      border: '1px solid #4a3080', color: '#a78bfa',
+                    }}
+                  >
+                    {activeCahier.summary_points?.length
+                      ? <><RefreshCw size={13} /> Actualiser le résumé</>
+                      : <><Sparkles size={13} /> Générer le résumé du cours</>}
+                  </button>
+                </>
               )}
             </div>
 
@@ -2086,11 +2108,24 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
                                 <Loader size={13} className="spin" /> Génération…
                               </div>
                             ) : ua.summary_points && ua.summary_points.length > 0 ? (
-                              <ul style={{ margin: 0, paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                {ua.summary_points.map((pt, i) => (
-                                  <li key={i} style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{pt}</li>
-                                ))}
-                              </ul>
+                              <>
+                                <ul style={{ margin: 0, paddingLeft: '1rem', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                  {ua.summary_points.map((pt, i) => (
+                                    <li key={i} style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{pt}</li>
+                                  ))}
+                                </ul>
+                                <button
+                                  onClick={() => generateSummaryForUA(ua)}
+                                  title="Régénère ce résumé en tenant compte des documents ajoutés depuis"
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 4, marginTop: 8,
+                                    background: 'none', border: 'none', color: '#a78bfa',
+                                    cursor: 'pointer', fontSize: 11, padding: 0,
+                                  }}
+                                >
+                                  <RefreshCw size={11} /> Actualiser
+                                </button>
+                              </>
                             ) : (
                               <p style={{ fontSize: 12, color: 'var(--muted)' }}>Aucun résumé disponible.</p>
                             )}
