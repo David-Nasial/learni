@@ -8,7 +8,7 @@ import {
   getUAs, createUA, deleteUA,
   getDocuments, uploadDocument, deleteDocument,
   generateRevision, getCachedRevision, saveCachedRevision,
-  generateCahierSummary, generateUASummary, generateUARewrite,
+  generateCahierSummary, mergeCahierSummary, generateUASummary, generateUARewrite,
   callTutor, getUANotes, addUANote, deleteUANote, generateUAAudioParts, getUAAudioUrl, updateUAAudioMarkers,
   getFlashcardSetByUA, type FlashcardSet, type AudioPart, type AudioMarker,
   type Cahier, type UA, type CartableDocument, type RevisionExercise, type RevisionResult,
@@ -1274,6 +1274,23 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
 
   // Téléverser le cours complet en un seul document (crée/réutilise une UA dédiée)
   const FULL_COURSE_LABEL = 'Cours complet'
+  // Après un ajout de document : intègre le nouveau contenu au résumé général.
+  // Ne fait rien si aucun résumé n'a encore été généré — pas de coût imprévu.
+  const mergeNewContentIntoSummary = useCallback(async (newText: string) => {
+    const cahier = activeCahier
+    if (!cahier?.summary_points?.length || !newText.trim()) return
+    setCahierSummaryLoading(true)
+    try {
+      const points = await mergeCahierSummary(cahier.id, cahier.name, cahier.summary_points, newText, revLang)
+      setActiveCahier(c => c ? { ...c, summary_points: points } : c)
+      setCahiers(prev => prev.map(c => c.id === cahier.id ? { ...c, summary_points: points } : c))
+    } catch {
+      // On garde le résumé précédent — le bouton "Actualiser" reste disponible.
+    } finally {
+      setCahierSummaryLoading(false)
+    }
+  }, [activeCahier, revLang])
+
   const handleUploadFullCourse = async (file: File) => {
     if (!activeCahier || !user) return
     setUploadingFullCourse(true); setError('')
@@ -1290,6 +1307,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       const updatedUA = { ...targetUA, documents: [...(targetUA.documents ?? []), doc] }
       setUAs(prev => prev.map(u => u.id === updatedUA.id ? updatedUA : u))
       setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).map(u => u.id === updatedUA.id ? updatedUA : u) } : c)
+      mergeNewContentIntoSummary(text)
       await openUA(updatedUA)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de lire ce fichier.')
@@ -1324,22 +1342,25 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       setDocuments(prev => [...prev, doc])
       // Mettre à jour l'UA dans la liste
       setUAs(prev => prev.map(u => u.id === activeUA.id ? { ...u, documents: [...(u.documents ?? []), doc] } : u))
+      mergeNewContentIntoSummary(text)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de lire ce fichier.')
     } finally { setUploading(false) }
-  }, [activeUA, user])
+  }, [activeUA, user, mergeNewContentIntoSummary])
 
   // Téléverser une ou plusieurs photos (chaque photo devient un document, transcrit par l'IA)
   const handleUploadPhotos = useCallback(async (files: File[]) => {
     if (!activeUA || !user || files.length === 0) return
     setProcessingPhotos(true); setError('')
     setPhotoProgress({ current: 0, total: files.length })
+    const addedTexts: string[] = []
     try {
       for (let i = 0; i < files.length; i++) {
         setPhotoProgress({ current: i + 1, total: files.length })
         const file = files[i]
         const text = await extractTextFromImage(file)
         const doc  = await uploadDocument(activeUA.id, user.id, file.name || `Photo ${i + 1}`, text, file.size)
+        addedTexts.push(text)
         setDocuments(prev => [...prev, doc])
         setUAs(prev => prev.map(u => u.id === activeUA.id ? { ...u, documents: [...(u.documents ?? []), doc] } : u))
       }
@@ -1348,8 +1369,10 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     } finally {
       setProcessingPhotos(false)
       setPhotoProgress({ current: 0, total: 0 })
+      // Une seule fusion pour toutes les photos ajoutées, pas une par photo.
+      if (addedTexts.length) mergeNewContentIntoSummary(addedTexts.join('\n\n'))
     }
-  }, [activeUA, user])
+  }, [activeUA, user, mergeNewContentIntoSummary])
 
   const handleDeleteDoc = async (docId: string) => {
     if (!confirm('Supprimer ce document ?')) return

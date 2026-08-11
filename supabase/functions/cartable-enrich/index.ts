@@ -50,7 +50,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, title, content, language } = await req.json()
+    const { action, title, content, language, existingPoints } = await req.json()
 
     if (!content || !content.trim()) {
       return new Response(JSON.stringify({ error: 'Contenu manquant.' }), {
@@ -78,6 +78,42 @@ Règles :
 - Chaque point : 1-2 phrases concises, qui couvrent une idée distincte du contenu
 - Couvre l'ensemble du contenu, pas seulement le début
 - Réponds UNIQUEMENT en JSON valide, sans markdown
+`.trim()
+
+      const result = await callClaude(
+        'Tu es un professeur expert. Réponds UNIQUEMENT en JSON valide, sans texte avant ni après, sans balises markdown.',
+        userPrompt, 2048
+      )
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Intègre un nouveau document au résumé existant, sans tout régénérer :
+    // on n'envoie que les points déjà établis + le contenu qui vient d'être ajouté.
+    if (action === 'summary_merge') {
+      const previous = Array.isArray(existingPoints) ? existingPoints : []
+      const userPrompt = `
+Tu es un professeur expert. Voici le résumé actuel du cours "${label}" en ${lang}, sous forme de points clés :
+---
+${previous.map((p: string, i: number) => `${i + 1}. ${p}`).join('\n')}
+---
+
+Un nouveau document vient d'être ajouté à ce cours :
+---
+${content.slice(0, 12000)}
+---
+
+Mets à jour le résumé pour qu'il couvre AUSSI ce nouveau contenu.
+
+Règles :
+- CONSERVE les points existants qui restent valables (reformule-les seulement si le nouveau contenu les précise ou les corrige).
+- AJOUTE des points pour les notions apportées par le nouveau document.
+- Garde un ensemble cohérent de 4 à 12 points au total, chacun en 1-2 phrases.
+- Réponds UNIQUEMENT en JSON valide, sans markdown.
+
+Retourne un JSON avec cette structure EXACTE :
+{ "points": ["Point clé 1...", "Point clé 2...", "..."] }
 `.trim()
 
       const result = await callClaude(

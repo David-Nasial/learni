@@ -1114,6 +1114,22 @@ export async function generateCahierSummary(
   return points
 }
 
+// Intègre un document fraîchement ajouté au résumé existant du cahier, sans
+// tout régénérer — n'envoie que les points actuels + le nouveau contenu.
+export async function mergeCahierSummary(
+  cahierId: string, title: string, existingPoints: string[], newContent: string, language: 'fr' | 'en'
+): Promise<string[]> {
+  const data = await callCartableEnrich({
+    action: 'summary_merge', title, content: newContent, existingPoints, language,
+  })
+  const points = (Array.isArray(data.points) ? data.points : []) as string[]
+  if (points.length === 0) return existingPoints
+  await supabase.from('cartable_cahiers')
+    .update({ summary_points: points, summary_generated_at: new Date().toISOString() })
+    .eq('id', cahierId)
+  return points
+}
+
 export async function generateUASummary(
   uaId: string, title: string, content: string, language: 'fr' | 'en'
 ): Promise<string[]> {
