@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, Upload, ChevronLeft, ChevronRight, BookOpen, FileText, Loader,
          GraduationCap, AlertTriangle, CheckCircle, XCircle, RefreshCw, RotateCcw,
          Volume2, Pause, Play, StopCircle, Library, ChevronDown, ChevronUp,
@@ -1199,9 +1200,14 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   // Sélection de texte sur la page de lecture → propose d'ajouter une note ancrée
   const handleTextSelection = () => {
     const sel = window.getSelection()
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
+    // Sélection vidée (simple tap ailleurs) : on retire la proposition, sauf si
+    // le formulaire est ouvert — y écrire fait justement disparaître la sélection.
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      if (!showNoteForm) setSelectionInfo(null)
+      return
+    }
     const text = sel.toString().trim()
-    if (!text || text.length > 300) { setSelectionInfo(null); return }
+    if (!text || text.length > 300) { if (!showNoteForm) setSelectionInfo(null); return }
     const range = sel.getRangeAt(0)
     const container = readContentRef.current
     if (!container || !container.contains(range.commonAncestorContainer)) return
@@ -1219,6 +1225,25 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     setShowNoteForm(false)
     setNoteDraft('')
   }
+
+  // On écoute le changement de sélection plutôt que la fin du geste : sur mobile,
+  // la sélection n'est pas encore établie quand le doigt se lève (l'utilisateur
+  // ajuste encore les poignées), donc `touchend` seul ne déclenchait jamais rien.
+  const textSelectionRef = useRef(handleTextSelection)
+  textSelectionRef.current = handleTextSelection
+  useEffect(() => {
+    if (view !== 'read') return
+    let timer = 0
+    const onSelectionChange = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => textSelectionRef.current(), 250)
+    }
+    document.addEventListener('selectionchange', onSelectionChange)
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange)
+      window.clearTimeout(timer)
+    }
+  }, [view])
 
   const handleSaveInlineNote = async () => {
     if (!user || !readUA || !selectionInfo || !noteDraft.trim()) return
@@ -1498,13 +1523,15 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
               <p style={{ color: '#555', fontSize: 11.5, marginBottom: '1rem' }}>
                 💡 Sélectionne un passage pour y ajouter ta propre note.
               </p>
-              <div ref={readContentRef} onMouseUp={handleTextSelection} onTouchEnd={handleTextSelection}>
+              <div ref={readContentRef}>
                 {renderRewrittenContent(readUA.rewritten_content ?? '', readUA.rewritten_comments ?? {}, uaNotes, openCommentId, setOpenCommentId, handleDeleteStudentNote)}
               </div>
             </>
           )}
 
-          {selectionInfo && (
+          {/* Rendu hors du conteneur animé : une `transform` sur un ancêtre
+              redéfinit la référence d'un élément en position fixe et le décale. */}
+          {selectionInfo && createPortal(
             <div style={{
               position: 'fixed', zIndex: 210,
               left: Math.min(Math.max(selectionInfo.x, 160), window.innerWidth - 160),
@@ -1563,7 +1590,8 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
                   </div>
                 </div>
               )}
-            </div>
+            </div>,
+            document.body,
           )}
 
           {!readLoading && docs.length > 0 && (
