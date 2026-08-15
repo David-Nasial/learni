@@ -60,7 +60,9 @@ function buildParagraphRanges(rawPara: string, paraIndex: number, studentNotes: 
   return { displayText, ranges }
 }
 
-const PARA_STYLE: React.CSSProperties = { marginBottom: '1.15rem', lineHeight: 1.85, color: 'var(--text)', fontSize: 15 }
+// `position: relative` : c'est le paragraphe qui sert d'ancrage aux bulles de
+// commentaire, pour qu'elles s'étendent sur sa largeur et jamais au-delà de l'écran.
+const PARA_STYLE: React.CSSProperties = { marginBottom: '1.15rem', lineHeight: 1.85, color: 'var(--text)', fontSize: 15, position: 'relative' }
 
 function renderParagraph(
   displayText: string, ranges: AnnotationRange[], paraIndex: number,
@@ -90,7 +92,7 @@ function renderParagraph(
         if (seg.covering.length === 0) return <span key={i}>{seg.text}</span>
         const hasStudent = seg.covering.some(c => c.kind === 'student')
         return (
-          <span key={i} style={{ position: 'relative' }}>
+          <span key={i}>
             <span style={{ background: hasStudent ? '#3a2e12' : '#2d1b69', borderRadius: 4, padding: '1px 3px' }}>{seg.text}</span>
             {seg.covering.map(r => {
               const key = `${paraIndex}-${r.kind}-${r.id}`
@@ -98,7 +100,7 @@ function renderParagraph(
               const color = r.kind === 'student' ? '#f5a623' : '#a78bfa'
               const commentText = r.kind === 'ai' ? (aiComments[r.id] ?? '') : r.comment
               return (
-                <span key={key} style={{ position: 'relative' }}>
+                <span key={key}>
                   <button
                     onClick={() => setOpenId(isOpen ? null : key)}
                     title="Voir le commentaire"
