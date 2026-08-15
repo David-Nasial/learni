@@ -107,12 +107,21 @@ function renderParagraph(
                     <MessageCircle size={14} />
                   </button>
                   {isOpen && (
-                    <span style={{
-                      position: 'absolute', bottom: '100%', left: 0, zIndex: 50, marginBottom: 6,
+                    <span className="annot-popup" style={{
                       background: 'var(--bg2)', border: `1px solid ${r.kind === 'student' ? '#6b4a12' : '#4a3080'}`, borderRadius: 10,
                       padding: '.7rem .9rem', fontSize: 13, lineHeight: 1.5, color: 'var(--text)',
-                      width: 260, boxShadow: '0 8px 30px rgba(0,0,0,.5)', display: 'block',
+                      boxShadow: '0 8px 30px rgba(0,0,0,.5)', display: 'block',
                     }}>
+                      <button
+                        onClick={() => setOpenId(null)}
+                        title="Fermer"
+                        style={{
+                          float: 'right', marginLeft: 8, background: 'none', border: 'none',
+                          color: 'var(--muted)', cursor: 'pointer', padding: 0, display: 'flex',
+                        }}
+                      >
+                        <X size={13} />
+                      </button>
                       {commentText}
                       {r.kind === 'student' && (
                         <button
