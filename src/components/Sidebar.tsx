@@ -1,7 +1,7 @@
 // ─── Sidebar — LearnI ─────────────────────────────────────────────────────────
 import { Home, FileText, BarChart2, Layers, Bot, DollarSign,
          GraduationCap, User2, X, RefreshCw, Users, Calendar,
-         BookOpen, Briefcase, Lock, PenTool } from 'lucide-react'
+         BookOpen, Briefcase, Lock, PenTool, Inbox, MessageSquarePlus } from 'lucide-react'
 import type { Page, Plan, AppMode } from '../types'
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
   onProFeature:  (feature: string) => void
   onClose:       () => void
   onChangeMode:  () => void
+  onFeedback?:   () => void
 }
 
 // ─── Définition des accès par plan ───────────────────────────────────────────
@@ -119,6 +120,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: <DollarSign size={17} />, label: 'Tarifs', page: 'pricing',
     access: () => 'show',
   },
+  {
+    // 'hidden' pour tout le monde — seul le superadmin contourne (voir la boucle de rendu).
+    icon: <Inbox size={17} />, label: 'Retours utilisateurs', page: 'feedback-inbox',
+    access: () => 'hidden',
+  },
 ]
 
 const BADGE_COLORS: Record<string, { color: string; bg: string; border: string }> = {
@@ -128,7 +134,7 @@ const BADGE_COLORS: Record<string, { color: string; bg: string; border: string }
 }
 
 export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn,
-  onNavigate, onProFeature, onClose, onChangeMode }: Props) {
+  onNavigate, onProFeature, onClose, onChangeMode, onFeedback }: Props) {
 
   const go = (page: Page) => { onNavigate(page); onClose() }
 
@@ -231,6 +237,21 @@ export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn,
               fontSize: 14, fontFamily: 'var(--font-body)', width: '100%', textAlign: 'left', cursor: 'pointer',
             }}>
               {schoolItem.icon} {schoolItem.label}
+            </button>
+          </>
+        )}
+
+        {/* Donner son avis — accessible à tous les comptes connectés */}
+        {isLoggedIn && onFeedback && (
+          <>
+            <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 4px' }} />
+            <button onClick={() => { onFeedback(); onClose() }} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', borderRadius: 8,
+              background: 'transparent', border: 'none', color: 'var(--muted)',
+              fontSize: 14, fontFamily: 'var(--font-body)', width: '100%', textAlign: 'left', cursor: 'pointer',
+            }}>
+              <MessageSquarePlus size={17} /> Donner mon avis
             </button>
           </>
         )}

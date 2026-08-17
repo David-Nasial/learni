@@ -70,6 +70,48 @@ export interface Profile {
   test_plan_override?: 'free' | 'starter' | 'pro' | 'autodidacte' | 'teacher' | null
   /** Présent uniquement quand `role` a été temporairement ramené à 'student' pour simuler un plan — la vraie valeur est ici. */
   true_role?: 'student' | 'teacher' | 'superadmin'
+  /** Ce que l'utilisateur a dit vouloir réviser, saisi pendant l'onboarding. */
+  study_goal?: string | null
+}
+
+// ─── Retours utilisateurs ─────────────────────────────────────────────────────
+
+export interface AppFeedback {
+  id: string
+  user_id: string | null
+  email: string | null
+  kind: 'bug' | 'idea' | 'other'
+  message: string
+  rating: number | null
+  page: string | null
+  handled: boolean
+  created_at: string
+}
+
+export async function sendFeedback(
+  userId: string, email: string | undefined,
+  kind: 'bug' | 'idea' | 'other', message: string,
+  rating?: number, page?: string,
+): Promise<void> {
+  const { error } = await supabase.from('app_feedback').insert({
+    user_id: userId, email: email ?? null, kind, message,
+    rating: rating ?? null, page: page ?? null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function getAllFeedback(): Promise<AppFeedback[]> {
+  const { data, error } = await supabase
+    .from('app_feedback')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as AppFeedback[]
+}
+
+export async function setFeedbackHandled(id: string, handled: boolean): Promise<void> {
+  const { error } = await supabase.from('app_feedback').update({ handled }).eq('id', id)
+  if (error) throw new Error(error.message)
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {

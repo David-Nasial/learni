@@ -24,7 +24,9 @@ import { HomeworkPage }      from './pages/HomeworkPage'
 import { StudentDashboard }   from './pages/StudentDashboard'
 import { OnboardingModal }    from './components/OnboardingModal'
 import { useLocalStorage }    from './hooks/useLocalStorage'
-import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan, type FlashcardSet } from './utils/supabase'
+import { FeedbackModal }       from './components/FeedbackModal'
+import { FeedbackInboxPage }   from './pages/FeedbackInboxPage'
+import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan, updateProfile, type FlashcardSet } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
   GenerateOptions, Question, WrittenGrade,
@@ -123,6 +125,7 @@ function AppInner() {
 
   // Onboarding
   const [onboardingType, setOnboarding] = useState<'first' | Plan | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false)
   const [seenOnboarding, setSeenOnboarding] = useLocalStorage<string[]>('learni_onboarding_seen', [])
 
   // Sync plan depuis profil Supabase
@@ -154,6 +157,15 @@ function AppInner() {
       setTimeout(() => window.location.reload(), 2000)
     }
   }, [])
+
+  // Objectif saisi pendant l'onboarding — sert à personnaliser l'accueil.
+  const handleSaveStudyGoal = async (goal: string) => {
+    if (!user) return
+    try {
+      await updateProfile(user.id, { study_goal: goal })
+      await refreshProfile()
+    } catch { /* non bloquant : l'onboarding continue sans */ }
+  }
 
   const closeOnboarding = () => {
     if (onboardingType) {
@@ -302,7 +314,7 @@ function AppInner() {
   const renderPage = () => {
     switch (page) {
       case 'home':
-        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} onToggleAutodidacteOverride={handleToggleAutodidacteOverride} onSetSuperadminTestPlan={handleSetSuperadminTestPlan} />
+        return <HomePage onNavigate={navigate} onUpgrade={() => showPaywall('sub')} user={user} profile={profile} plan={plan} appMode={appMode} onToggleAutodidacteOverride={handleToggleAutodidacteOverride} onSetSuperadminTestPlan={handleSetSuperadminTestPlan} resultsCount={results.length} />
 
       case 'upload':
         return (
@@ -388,6 +400,9 @@ function AppInner() {
       case 'homework':
         return <HomeworkPage />
 
+      case 'feedback-inbox':
+        return <FeedbackInboxPage />
+
       default:
         return null
     }
@@ -415,6 +430,7 @@ function AppInner() {
         onProFeature={(f) => { setSidebar(false); showPaywall(f) }}
         onClose={() => setSidebar(false)}
         onChangeMode={() => { setAppMode(null); setSidebar(false) }}
+        onFeedback={() => setShowFeedback(true)}
       />
       <main style={{ paddingBottom: '3rem' }}>{renderPage()}</main>
       <Paywall
@@ -426,10 +442,13 @@ function AppInner() {
       {onboardingType && (
         <OnboardingModal
           type={onboardingType}
+          role={profile?.role}
           onClose={closeOnboarding}
           onNavigate={(p) => { closeOnboarding(); navigate(p) }}
+          onSaveGoal={handleSaveStudyGoal}
         />
       )}
+      {showFeedback && <FeedbackModal page={page} onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }

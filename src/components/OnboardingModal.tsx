@@ -1,187 +1,208 @@
 // ─── OnboardingModal — guide first-time & post-upgrade ───────────────────────
 import { useState } from 'react'
-import { X, ChevronRight, ChevronLeft } from 'lucide-react'
+import {
+  X, ChevronRight, ChevronLeft, Sparkles, FileText, BarChart2, Rocket,
+  Layers, Infinity as InfinityIcon, Calendar, Briefcase, GraduationCap,
+  Bot, Users, School, ClipboardList, Target,
+} from 'lucide-react'
 import type { Plan, Page } from '../types'
 
+type IconType = typeof FileText
+
 interface Step {
-  emoji: string
+  icon: IconType
   title: string
   desc: string
   action?: { label: string; page: Page }
+  /** Étape qui demande son objectif à l'élève, pour personnaliser la suite. */
+  askGoal?: boolean
 }
 
 // ─── Étapes par plan ──────────────────────────────────────────────────────────
 const STEPS_FIRST: Step[] = [
   {
-    emoji: '👋',
-    title: 'Bienvenue sur LearnI !',
-    desc: 'LearnI utilise l\'IA pour t\'aider à réviser plus vite et plus efficacement. On va te montrer comment ça marche en 4 étapes.',
+    icon: Sparkles,
+    title: 'Bienvenue sur LearnI',
+    desc: 'LearnI transforme tes documents de cours en révisions actives grâce à l\'IA. Quatre étapes pour tout comprendre.',
   },
   {
-    emoji: '📄',
-    title: 'Génère un quiz en 10 secondes',
-    desc: 'Importe n\'importe quel PDF, manuel ou notes de cours. L\'IA analyse le contenu et crée un quiz sur mesure instantanément.',
+    icon: Target,
+    title: 'Que veux-tu réviser ?',
+    desc: 'Dis-nous sur quoi tu travailles en ce moment — on adaptera tes suggestions et ton tableau de bord.',
+    askGoal: true,
+  },
+  {
+    icon: FileText,
+    title: 'Ton premier quiz en 10 secondes',
+    desc: 'Importe un PDF, un manuel ou tes notes. L\'IA analyse le contenu et crée un quiz sur mesure, avec les explications de chaque réponse.',
     action: { label: 'Essayer maintenant', page: 'upload' },
   },
   {
-    emoji: '📊',
-    title: 'Suis tes progrès',
-    desc: 'Chaque quiz est enregistré dans ton historique. Tu peux voir ton score, ta progression et identifier tes points faibles.',
-    action: { label: 'Voir mon historique', page: 'history' },
+    icon: BarChart2,
+    title: 'Suis ta progression',
+    desc: 'Chaque quiz est enregistré. Tu vois ton score, ton évolution, et les thèmes à retravailler en priorité.',
+    action: { label: 'Voir mes résultats', page: 'history' },
   },
   {
-    emoji: '🚀',
-    title: 'Tu es prêt !',
-    desc: 'Lance ton premier quiz maintenant. Si tu veux plus de fonctionnalités (Tuteur IA, Cours, Flashcards), explore nos plans.',
+    icon: Rocket,
+    title: 'Tout est prêt',
+    desc: 'Lance ton premier quiz. Les plans supérieurs ajoutent le tuteur IA, les cours générés, Mon Cartable et bien plus.',
     action: { label: 'Générer mon premier quiz', page: 'upload' },
   },
 ]
 
 const STEPS_STARTER: Step[] = [
   {
-    emoji: '🎉',
-    title: 'Bienvenue dans le plan Starter !',
-    desc: 'Tu as maintenant accès à plus de quiz par jour et à l\'historique complet de tes résultats.',
+    icon: Sparkles,
+    title: 'Bienvenue dans le plan Starter',
+    desc: 'Tu as maintenant plus de quiz par jour, les flashcards IA et l\'historique complet de tes résultats.',
   },
   {
-    emoji: '📄',
+    icon: FileText,
     title: '5 quiz par jour',
-    desc: 'Tu peux générer jusqu\'à 5 quiz par jour — idéal pour réviser plusieurs matières sans limite.',
+    desc: 'De quoi réviser plusieurs matières dans la même journée, avec jusqu\'à 35 questions par quiz.',
     action: { label: 'Générer un quiz', page: 'upload' },
   },
   {
-    emoji: '🃏',
+    icon: Layers,
     title: 'Flashcards IA',
-    desc: 'Nouveau ! Importe un PDF et l\'IA génère des cartes recto/verso pour mémoriser plus vite. Tes jeux sont sauvegardés dans ta bibliothèque.',
+    desc: 'Importe un document et l\'IA en tire des cartes recto/verso. Tes jeux restent sauvegardés dans ta bibliothèque.',
     action: { label: 'Essayer les flashcards', page: 'flashcards' },
   },
   {
-    emoji: '📊',
+    icon: BarChart2,
     title: 'Historique illimité',
-    desc: 'Tous tes résultats sont sauvegardés. Reviens quand tu veux pour voir ta progression.',
-    action: { label: 'Voir mon historique', page: 'history' },
+    desc: 'Tous tes résultats sont conservés — reviens quand tu veux mesurer le chemin parcouru.',
+    action: { label: 'Voir mes résultats', page: 'history' },
   },
 ]
 
 const STEPS_PRO: Step[] = [
   {
-    emoji: '🔥',
-    title: 'Bienvenue dans le plan Pro !',
-    desc: 'Quiz illimités, plan d\'étude intelligent et flashcards IA. Tu as tout ce qu\'il faut pour exceller.',
+    icon: Sparkles,
+    title: 'Bienvenue dans le plan Pro',
+    desc: 'Quiz illimités, plan d\'étude intelligent, Mon Cartable et lecture audio par voix IA.',
   },
   {
-    emoji: '♾️',
+    icon: InfinityIcon,
     title: 'Quiz illimités',
-    desc: 'Plus de limite journalière. Génère autant de quiz que tu veux, quand tu veux.',
+    desc: 'Plus aucune limite journalière. Génère autant de quiz que nécessaire, sur autant de documents que tu veux.',
     action: { label: 'Générer un quiz', page: 'upload' },
   },
   {
-    emoji: '📅',
-    title: 'Plan d\'étude + Mon Agenda',
-    desc: 'Ajoute tes examens, ton travail et tes disponibilités dans Mon Agenda. L\'IA génère ensuite un plan qui évite tes jours occupés et renforce tes matières faibles.',
+    icon: Calendar,
+    title: 'Plan d\'étude et agenda',
+    desc: 'Renseigne tes examens et tes disponibilités : l\'IA construit un planning qui évite tes jours chargés et cible tes points faibles.',
     action: { label: 'Ouvrir mon agenda', page: 'study' },
   },
   {
-    emoji: '🎒',
+    icon: Briefcase,
     title: 'Mon Cartable',
-    desc: 'Organise tes cours en cahiers et unités d\'apprentissage (UA), téléverse tes notes et génère des révisions ciblées avec corrections détaillées.',
+    desc: 'Organise tes cours par chapitre, ajoute tes documents ou des photos de ton manuel, puis fais-toi lire le cours à voix haute et révise dessus.',
     action: { label: 'Ouvrir mon cartable', page: 'cartable' },
   },
   {
-    emoji: '🃏',
+    icon: Layers,
     title: 'Flashcards IA',
-    desc: 'Génère des cartes recto/verso depuis tes documents pour mémoriser plus rapidement.',
+    desc: 'Des cartes recto/verso générées depuis n\'importe quel chapitre, pour mémoriser plus vite.',
     action: { label: 'Essayer les flashcards', page: 'flashcards' },
   },
 ]
 
 const STEPS_AUTODIDACTE: Step[] = [
   {
-    emoji: '🌟',
-    title: 'Bienvenue dans le plan Autodidacte !',
-    desc: 'Le plan complet pour apprendre seul : cours générés par l\'IA, tuteur personnel, communautés et flashcards.',
+    icon: Sparkles,
+    title: 'Bienvenue dans le plan Autodidacte',
+    desc: 'Le plan complet pour apprendre en autonomie : cours générés, tuteur personnel, communautés et flashcards.',
   },
   {
-    emoji: '🎓',
-    title: 'Cours générés par l\'IA',
-    desc: 'Choisis n\'importe quel sujet — Python, Histoire, Physique — et l\'IA crée un cours complet avec modules, leçons et exercices.',
+    icon: GraduationCap,
+    title: 'Des cours créés pour toi',
+    desc: 'Choisis un sujet — Python, histoire, physique — et l\'IA construit un cours complet avec modules, leçons et exercices.',
     action: { label: 'Créer mon premier cours', page: 'courses' },
   },
   {
-    emoji: '🤖',
-    title: 'Tuteur IA personnel',
-    desc: 'Pose toutes tes questions à ton tuteur IA. Il s\'adapte à ton niveau : débutant, normal ou mode examen strict.',
+    icon: Bot,
+    title: 'Ton tuteur IA',
+    desc: 'Pose toutes tes questions. Il s\'adapte à ton niveau : pédagogue avec un débutant, exigeant en mode examen.',
     action: { label: 'Parler au tuteur', page: 'tutor' },
   },
   {
-    emoji: '📅',
-    title: 'Plan d\'étude + Mon Agenda',
-    desc: 'Ajoute tes examens, ton travail et tes disponibilités dans Mon Agenda. L\'IA génère ensuite un plan qui évite tes jours occupés et renforce tes matières faibles.',
+    icon: Calendar,
+    title: 'Plan d\'étude et agenda',
+    desc: 'Renseigne tes échéances et tes disponibilités : l\'IA construit un planning réaliste autour de ton emploi du temps.',
     action: { label: 'Ouvrir mon agenda', page: 'study' },
   },
   {
-    emoji: '🏘️',
+    icon: Users,
     title: 'Communautés d\'apprenants',
-    desc: 'Rejoins des groupes d\'étude par matière, partage tes notes, participe aux défis hebdomadaires.',
+    desc: 'Rejoins des groupes par matière, partage tes notes et participe aux défis hebdomadaires.',
     action: { label: 'Explorer les communautés', page: 'community' },
   },
   {
-    emoji: '🃏',
+    icon: Layers,
     title: 'Flashcards IA',
-    desc: 'Cartes mémoire générées automatiquement depuis tes documents ou tes cours.',
+    desc: 'Des cartes mémoire générées automatiquement depuis tes documents ou tes cours.',
     action: { label: 'Essayer les flashcards', page: 'flashcards' },
   },
 ]
 
 const STEPS_TEACHER: Step[] = [
   {
-    emoji: '🏫',
-    title: 'Bienvenue, enseignant(e) !',
-    desc: 'Gérez vos classes, partagez des documents et suivez la progression de chaque élève depuis votre tableau de bord.',
+    icon: School,
+    title: 'Bienvenue sur LearnI',
+    desc: 'Gère tes classes, partage des documents et suis la progression de chaque élève depuis un seul tableau de bord.',
   },
   {
-    emoji: '📋',
-    title: 'Créez vos classes',
-    desc: 'Créez une classe, invitez vos élèves par code ou lien. Chaque classe a son propre espace de discussion.',
-    action: { label: 'Voir mon tableau de bord', page: 'teacher' },
+    icon: ClipboardList,
+    title: 'Crée ta première classe',
+    desc: 'Une classe génère un code que tes élèves saisissent pour la rejoindre. Chaque classe a son espace de discussion et de ressources.',
+    action: { label: 'Ouvrir mon tableau de bord', page: 'teacher' },
   },
   {
-    emoji: '📄',
-    title: 'Partagez des quiz',
-    desc: 'Importez un document de cours et générez un quiz à partager avec toute la classe en un clic.',
+    icon: FileText,
+    title: 'Prépare des examens',
+    desc: 'Importe un document de cours et génère un quiz — tu peux même préciser tes propres consignes d\'examen.',
     action: { label: 'Générer un quiz', page: 'upload' },
   },
   {
-    emoji: '📊',
-    title: 'Suivez vos élèves',
-    desc: 'Consultez les résultats individuels et collectifs. Identifiez rapidement les élèves qui ont besoin d\'aide.',
-    action: { label: 'Voir mon tableau de bord', page: 'teacher' },
+    icon: BarChart2,
+    title: 'Suis tes élèves',
+    desc: 'Consulte les résultats individuels et collectifs, et repère vite les élèves qui ont besoin d\'aide.',
+    action: { label: 'Ouvrir mon tableau de bord', page: 'teacher' },
   },
 ]
 
-function getSteps(type: 'first' | Plan): Step[] {
-  if (type === 'first')         return STEPS_FIRST
-  if (type === 'starter')       return STEPS_STARTER
-  if (type === 'pro')           return STEPS_PRO
-  if (type === 'autodidacte')   return STEPS_AUTODIDACTE
-  if (type === 'teacher')       return STEPS_TEACHER
+// `role` prime sur le plan : un enseignant doit voir son guide dès sa première
+// connexion, même avant d'avoir souscrit au plan Enseignant.
+function getSteps(type: 'first' | Plan, role?: string): Step[] {
+  if (role === 'teacher' && (type === 'first' || type === 'teacher')) return STEPS_TEACHER
+  if (type === 'starter')     return STEPS_STARTER
+  if (type === 'pro')         return STEPS_PRO
+  if (type === 'autodidacte') return STEPS_AUTODIDACTE
+  if (type === 'teacher')     return STEPS_TEACHER
   return STEPS_FIRST
 }
 
 // ─── Composant ────────────────────────────────────────────────────────────────
 interface Props {
   type: 'first' | Plan
+  role?: string
   onClose: () => void
   onNavigate: (page: Page) => void
+  onSaveGoal?: (goal: string) => void
 }
 
-export function OnboardingModal({ type, onClose, onNavigate }: Props) {
-  const steps = getSteps(type)
+export function OnboardingModal({ type, role, onClose, onNavigate, onSaveGoal }: Props) {
+  const steps = getSteps(type, role)
   const [idx, setIdx] = useState(0)
+  const [goal, setGoal] = useState('')
   const step = steps[idx]
   const isLast = idx === steps.length - 1
+  const Icon = step.icon
 
   const goNext = () => {
+    if (step.askGoal && goal.trim()) onSaveGoal?.(goal.trim())
     if (isLast) { onClose(); return }
     setIdx(i => i + 1)
   }
@@ -236,8 +257,13 @@ export function OnboardingModal({ type, onClose, onNavigate }: Props) {
 
         {/* Contenu */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ fontSize: '3.5rem', marginBottom: '1rem', lineHeight: 1 }}>
-            {step.emoji}
+          <div style={{
+            width: 60, height: 60, borderRadius: 16, margin: '0 auto 1.25rem',
+            background: 'linear-gradient(135deg, #2d1b69, #1a1033)',
+            border: '1px solid #4a3080',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon size={26} style={{ color: '#a78bfa' }} />
           </div>
           <h2 style={{
             fontFamily: 'var(--font-head)', fontSize: '1.35rem', fontWeight: 800,
@@ -248,6 +274,23 @@ export function OnboardingModal({ type, onClose, onNavigate }: Props) {
           <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.75 }}>
             {step.desc}
           </p>
+
+          {step.askGoal && (
+            <input
+              autoFocus
+              value={goal}
+              onChange={e => setGoal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') goNext() }}
+              placeholder="Ex : Assurance de personnes, Biologie 101…"
+              style={{
+                width: '100%', boxSizing: 'border-box', marginTop: '1.25rem',
+                padding: '11px 14px', background: 'var(--bg3)',
+                border: '1px solid var(--border)', borderRadius: 10,
+                color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-body)',
+                textAlign: 'center',
+              }}
+            />
+          )}
         </div>
 
         {/* Boutons */}
@@ -287,14 +330,14 @@ export function OnboardingModal({ type, onClose, onNavigate }: Props) {
               cursor: 'pointer', fontSize: 13,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
             }}>
-              {isLast ? 'C\'est parti ! 🎯' : <>Suivant <ChevronRight size={15} /></>}
+              {isLast ? 'Commencer' : <>Suivant <ChevronRight size={15} /></>}
             </button>
           </div>
 
           {/* Skip */}
           {!isLast && (
             <button onClick={onClose} style={{
-              background: 'none', border: 'none', color: '#555',
+              background: 'none', border: 'none', color: 'var(--muted)',
               fontSize: 12, cursor: 'pointer', padding: '4px',
             }}>
               Passer le guide

@@ -13,6 +13,8 @@ interface Props {
   plan?:      Plan
   onToggleAutodidacteOverride?: () => void
   onSetSuperadminTestPlan?: (plan: Plan | null) => void
+  /** Nombre de quiz déjà complétés — 0 déclenche l'accueil « premier jour ». */
+  resultsCount?: number
 }
 
 // ─── Apparition au défilement ─────────────────────────────────────────────────
@@ -72,7 +74,7 @@ const PLAN_LABELS: Record<string, { label: string; color: string; bg: string }> 
 }
 
 // ─── Dashboard utilisateur connecté ──────────────────────────────────────────
-function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggleAutodidacteOverride, onSetSuperadminTestPlan }: Props) {
+function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggleAutodidacteOverride, onSetSuperadminTestPlan, resultsCount }: Props) {
   // `plan` est le plan EFFECTIF (peut être 'pro' si la bascule est active) ;
   // `billedPlan` est le plan réellement payé — c'est lui qu'on affiche en badge principal.
   const billedPlan = profile?.billed_plan ?? plan
@@ -91,6 +93,10 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
   // `true_role` dans le même rendu, sans dépendre du useEffect de synchronisation d'App.tsx.
   const trueSuperadmin = profile?.role === 'superadmin' || profile?.true_role === 'superadmin'
   const testPlanActive = profile?.true_role === 'superadmin' ? profile?.plan : undefined
+
+  // Premier jour : aucun quiz complété — on accueille au lieu de dire « bon retour ».
+  const isNewUser = (resultsCount ?? 0) === 0
+  const studyGoal = profile?.study_goal?.trim()
 
   const quickActions = [
     {
@@ -150,7 +156,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-              Bon retour
+              {isNewUser ? 'Bienvenue' : 'Bon retour'}
             </div>
             <h1 style={{
               fontFamily: 'var(--font-head)', fontSize: 'clamp(1.4rem,3vw,2rem)',
@@ -159,7 +165,11 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
               Bonjour, <span style={{ background: 'linear-gradient(135deg, #a78bfa, #e03c3c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{firstName}</span> !
             </h1>
             <p style={{ color: 'var(--muted)', fontSize: 14 }}>
-              Prêt à apprendre quelque chose aujourd'hui ?
+              {isNewUser
+                ? studyGoal
+                  ? <>Ton premier quiz sur <strong style={{ color: 'var(--text)' }}>{studyGoal}</strong> t'attend.</>
+                  : 'Commence par importer un document — ton premier quiz prend 10 secondes.'
+                : 'Prêt à apprendre quelque chose aujourd\'hui ?'}
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginLeft: 'auto' }}>
@@ -338,16 +348,16 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
 }
 
 // ─── Page d'accueil visiteur ──────────────────────────────────────────────────
-export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan, onToggleAutodidacteOverride, onSetSuperadminTestPlan }: Props) {
+export function HomePage({ onNavigate, onUpgrade, appMode, user, profile, plan, onToggleAutodidacteOverride, onSetSuperadminTestPlan, resultsCount }: Props) {
 
   // Utilisateur connecté avec un plan → dashboard personnalisé
   if (user && plan && plan !== 'free') {
-    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan} onToggleAutodidacteOverride={onToggleAutodidacteOverride} onSetSuperadminTestPlan={onSetSuperadminTestPlan} />
+    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan} onToggleAutodidacteOverride={onToggleAutodidacteOverride} onSetSuperadminTestPlan={onSetSuperadminTestPlan} resultsCount={resultsCount} />
   }
 
   // Utilisateur connecté gratuit → dashboard simplifié
   if (user) {
-    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan ?? 'free'} onToggleAutodidacteOverride={onToggleAutodidacteOverride} onSetSuperadminTestPlan={onSetSuperadminTestPlan} />
+    return <DashboardHome onNavigate={onNavigate} onUpgrade={onUpgrade} appMode={appMode} user={user} profile={profile} plan={plan ?? 'free'} onToggleAutodidacteOverride={onToggleAutodidacteOverride} onSetSuperadminTestPlan={onSetSuperadminTestPlan} resultsCount={resultsCount} />
   }
 
   return (

@@ -81,6 +81,7 @@ export type Page =
   | 'flashcards'
   | 'cartable'
   | 'homework'
+  | 'feedback-inbox'
 
 // ─── Community types ──────────────────────────────────────────────────────────
 
