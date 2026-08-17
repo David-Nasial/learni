@@ -77,7 +77,11 @@ const PLAN_LABELS: Record<string, { label: string; color: string; bg: string }> 
 function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggleAutodidacteOverride, onSetSuperadminTestPlan, resultsCount }: Props) {
   // `plan` est le plan EFFECTIF (peut être 'pro' si la bascule est active) ;
   // `billedPlan` est le plan réellement payé — c'est lui qu'on affiche en badge principal.
-  const billedPlan = profile?.billed_plan ?? plan
+  // Exception : en test Super Admin, `billed_plan` contient le vrai plan du compte
+  // admin (souvent « gratuit ») ; c'est le plan simulé qui doit s'afficher.
+  const billedPlan = profile?.true_role === 'superadmin'
+    ? profile?.plan
+    : profile?.billed_plan ?? plan
   const autodidacteOverrideActive = profile?.plan_override === 'pro'
   const planInfo = PLAN_LABELS[billedPlan ?? 'free'] ?? PLAN_LABELS.free
   const firstName = profile?.name?.split(' ')[0] ?? profile?.email?.split('@')[0] ?? 'toi'
