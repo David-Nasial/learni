@@ -65,10 +65,14 @@ function buildParagraphRanges(rawPara: string, paraIndex: number, studentNotes: 
 // commentaire, pour qu'elles s'étendent sur sa largeur et jamais au-delà de l'écran.
 const PARA_STYLE: React.CSSProperties = { marginBottom: '1.15rem', lineHeight: 1.85, color: 'var(--text)', fontSize: 15, position: 'relative' }
 
+// `bottom` est mesuré au clic pour que la bulle s'ouvre juste au-dessus du mot
+// cliqué (l'ancrage sur le paragraphe ne donne que la contrainte horizontale).
+type OpenComment = { key: string; bottom: number } | null
+
 function renderParagraph(
   displayText: string, ranges: AnnotationRange[], paraIndex: number,
   aiComments: Record<string, string>,
-  openId: string | null, setOpenId: (id: string | null) => void,
+  openComment: OpenComment, setOpenComment: (v: OpenComment) => void,
   onDeleteStudentNote: (id: string) => void
 ) {
   if (ranges.length === 0) {
@@ -97,13 +101,21 @@ function renderParagraph(
             <span style={{ background: hasStudent ? '#3a2e12' : '#2d1b69', borderRadius: 4, padding: '1px 3px' }}>{seg.text}</span>
             {seg.covering.map(r => {
               const key = `${paraIndex}-${r.kind}-${r.id}`
-              const isOpen = openId === key
+              const isOpen = openComment?.key === key
               const color = r.kind === 'student' ? '#f5a623' : '#a78bfa'
               const commentText = r.kind === 'ai' ? (aiComments[r.id] ?? '') : r.comment
               return (
                 <span key={key}>
                   <button
-                    onClick={() => setOpenId(isOpen ? null : key)}
+                    onClick={e => {
+                      if (isOpen) { setOpenComment(null); return }
+                      // Le paragraphe est le parent positionné : `offsetTop` situe
+                      // donc l'icône dans le paragraphe, et on cale la bulle juste au-dessus.
+                      const btn = e.currentTarget
+                      const para = btn.offsetParent as HTMLElement | null
+                      const bottom = para ? para.offsetHeight - btn.offsetTop + 6 : 6
+                      setOpenComment({ key, bottom })
+                    }}
                     title="Voir le commentaire"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color, padding: '0 2px', verticalAlign: 'middle', display: 'inline-flex' }}
                   >
@@ -111,12 +123,13 @@ function renderParagraph(
                   </button>
                   {isOpen && (
                     <span className="annot-popup" style={{
+                      bottom: openComment.bottom,
                       background: 'var(--bg2)', border: `1px solid ${r.kind === 'student' ? '#6b4a12' : '#4a3080'}`, borderRadius: 10,
                       padding: '.7rem .9rem', fontSize: 13, lineHeight: 1.5, color: 'var(--text)',
                       boxShadow: '0 8px 30px rgba(0,0,0,.5)', display: 'block',
                     }}>
                       <button
-                        onClick={() => setOpenId(null)}
+                        onClick={() => setOpenComment(null)}
                         title="Fermer"
                         style={{
                           float: 'right', marginLeft: 8, background: 'none', border: 'none',
@@ -128,7 +141,7 @@ function renderParagraph(
                       {commentText}
                       {r.kind === 'student' && (
                         <button
-                          onClick={() => { onDeleteStudentNote(r.id); setOpenId(null) }}
+                          onClick={() => { onDeleteStudentNote(r.id); setOpenComment(null) }}
                           style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 12, padding: 0 }}
                         >
                           <Trash2 size={12} /> Supprimer ma note
@@ -150,13 +163,13 @@ function renderRewrittenContent(
   text: string,
   aiComments: Record<string, string>,
   studentNotes: UANote[],
-  openId: string | null, setOpenId: (id: string | null) => void,
+  openComment: OpenComment, setOpenComment: (v: OpenComment) => void,
   onDeleteStudentNote: (id: string) => void
 ) {
   const paragraphs = text.split(/\n{2,}/).filter(p => p.trim())
   return paragraphs.map((para, pi) => {
     const { displayText, ranges } = buildParagraphRanges(para, pi, studentNotes)
-    return renderParagraph(displayText, ranges, pi, aiComments, openId, setOpenId, onDeleteStudentNote)
+    return renderParagraph(displayText, ranges, pi, aiComments, openComment, setOpenComment, onDeleteStudentNote)
   })
 }
 
@@ -847,7 +860,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   const [readUA,      setReadUA]      = useState<UA | null>(null)
   const [readLoading, setReadLoading] = useState(false)
   const [readError,   setReadError]   = useState('')
-  const [openCommentId, setOpenCommentId] = useState<string | null>(null)
+  const [openComment, setOpenComment] = useState<OpenComment>(null)
 
   // Notes de l'élève (page de lecture)
   const [uaNotes,        setUaNotes]        = useState<UANote[]>([])
@@ -1172,7 +1185,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
   const openRead = async (ua: UA) => {
     setReadUA(ua)
     setReadError('')
-    setOpenCommentId(null)
+    setOpenComment(null)
     setSelectionInfo(null)
     setShowNoteForm(false)
     setView('read')
@@ -1524,7 +1537,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
                 💡 Sélectionne un passage pour y ajouter ta propre note.
               </p>
               <div ref={readContentRef}>
-                {renderRewrittenContent(readUA.rewritten_content ?? '', readUA.rewritten_comments ?? {}, uaNotes, openCommentId, setOpenCommentId, handleDeleteStudentNote)}
+                {renderRewrittenContent(readUA.rewritten_content ?? '', readUA.rewritten_comments ?? {}, uaNotes, openComment, setOpenComment, handleDeleteStudentNote)}
               </div>
             </>
           )}

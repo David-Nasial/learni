@@ -71,16 +71,14 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ─── Commentaires du cours réécrit ───────────────────────────────────────── */
-/* Ancrée sur la largeur du PARAGRAPHE (et non du mot) : elle reste au-dessus du
-   passage annoté comme avant, mais ne peut plus déborder du bord de l'écran,
-   même quand le mot annoté est tout à droite. */
+/* Largeur calée sur le PARAGRAPHE (jamais sur le mot) pour ne pas déborder de
+   l'écran ; la position verticale, elle, est calculée au clic pour que la bulle
+   s'ouvre juste au-dessus du mot annoté. */
 .annot-popup {
   position: absolute;
-  bottom: 100%;
   left: 0;
   right: 0;
   width: auto;
-  margin-bottom: 6px;
   z-index: 50;
 }
 
