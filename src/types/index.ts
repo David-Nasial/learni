@@ -82,6 +82,7 @@ export type Page =
   | 'cartable'
   | 'homework'
   | 'feedback-inbox'
+  | 'legal'
 
 // ─── Community types ──────────────────────────────────────────────────────────
 

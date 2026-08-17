@@ -8,12 +8,13 @@ interface Props {
   onSuccess:    () => void
   initialMode?: 'login' | 'signup'
   appMode:      AppMode   // 'personal' | 'school'
+  onShowLegal?: () => void
 }
 
 type Mode = 'login' | 'signup'
 type Role = 'student' | 'teacher'
 
-export function LoginPage({ onSuccess, initialMode = 'login', appMode }: Props) {
+export function LoginPage({ onSuccess, initialMode = 'login', appMode, onShowLegal }: Props) {
   const [mode,     setMode]     = useState<Mode>(initialMode)
   const [role,     setRole]     = useState<Role>('student')
   const [name,     setName]     = useState('')
@@ -232,6 +233,19 @@ export function LoginPage({ onSuccess, initialMode = 'login', appMode }: Props) 
       <button onClick={handleSubmit} disabled={loading} style={{ ...btnRed, width: '100%', opacity: loading ? .6 : 1 }}>
         {loading ? '⏳ Chargement…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
       </button>
+
+      {/* Consentement affiché à l'inscription */}
+      {mode === 'signup' && (
+        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: '.9rem', lineHeight: 1.6 }}>
+          En créant un compte, tu acceptes nos{' '}
+          <button
+            onClick={() => onShowLegal?.()}
+            style={{ background: 'none', border: 'none', color: '#a78bfa', fontSize: 12, textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+          >
+            conditions d'utilisation et notre politique de confidentialité
+          </button>.
+        </p>
+      )}
 
       <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--muted)', marginTop: '1.25rem' }}>
         {mode === 'login' ? 'Pas encore de compte ? ' : 'Déjà un compte ? '}

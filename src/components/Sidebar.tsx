@@ -1,7 +1,7 @@
 // ─── Sidebar — LearnI ─────────────────────────────────────────────────────────
 import { Home, FileText, BarChart2, Layers, Bot, DollarSign,
          GraduationCap, User2, X, RefreshCw, Users, Calendar,
-         BookOpen, Briefcase, Lock, PenTool, Inbox, MessageSquarePlus } from 'lucide-react'
+         BookOpen, Briefcase, Lock, PenTool, Inbox, MessageSquarePlus, Scale } from 'lucide-react'
 import type { Page, Plan, AppMode } from '../types'
 
 interface Props {
@@ -255,6 +255,16 @@ export function Sidebar({ open, currentPage, plan, appMode, role, isLoggedIn,
             </button>
           </>
         )}
+
+        {/* Mentions légales — accessibles à tous */}
+        <button onClick={() => go('legal')} style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 14px', borderRadius: 8,
+          background: 'transparent', border: 'none', color: '#5a6478',
+          fontSize: 12.5, fontFamily: 'var(--font-body)', width: '100%', textAlign: 'left', cursor: 'pointer',
+        }}>
+          <Scale size={15} /> Conditions & confidentialité
+        </button>
 
         {/* Bloc upgrade pour gratuit */}
         {plan === 'free' && !isSuperadmin && (

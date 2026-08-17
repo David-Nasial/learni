@@ -26,6 +26,7 @@ import { OnboardingModal }    from './components/OnboardingModal'
 import { useLocalStorage }    from './hooks/useLocalStorage'
 import { FeedbackModal }       from './components/FeedbackModal'
 import { FeedbackInboxPage }   from './pages/FeedbackInboxPage'
+import { LegalPage }           from './pages/LegalPage'
 import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan, updateProfile, type FlashcardSet } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
@@ -361,20 +362,20 @@ function AppInner() {
         return <PricingPage onUpgrade={(p) => { setPlan(p as Plan); setPaywall(null) } } onTeacher={() => showPaywall('teacher')} appMode={appMode} onLogin={() => navigate('login')} />
 
       case 'login':
-        return <LoginPage onSuccess={() => navigate('home')} appMode={appMode} />
+        return <LoginPage onSuccess={() => navigate('home')} appMode={appMode} onShowLegal={() => navigate('legal')} />
 
       // Pages école — seulement si mode school
       case 'teacher':
         if (appMode !== 'school') { navigate('home'); return null }
         return user
           ? <TeacherDashboard />
-          : <LoginPage onSuccess={() => navigate('teacher')} initialMode="login" appMode={appMode} />
+          : <LoginPage onSuccess={() => navigate('teacher')} initialMode="login" appMode={appMode} onShowLegal={() => navigate('legal')} />
 
       case 'student':
         if (appMode !== 'school') { navigate('home'); return null }
         return user
           ? <StudentDashboard />
-          : <LoginPage onSuccess={() => navigate('student')} initialMode="login" appMode={appMode} />
+          : <LoginPage onSuccess={() => navigate('student')} initialMode="login" appMode={appMode} onShowLegal={() => navigate('legal')} />
 
       case 'tutor':
         return <TutorPage />
@@ -402,6 +403,9 @@ function AppInner() {
 
       case 'feedback-inbox':
         return <FeedbackInboxPage />
+
+      case 'legal':
+        return <LegalPage onBack={() => navigate('home')} />
 
       default:
         return null
