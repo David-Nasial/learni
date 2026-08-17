@@ -123,7 +123,7 @@ function Terms() {
       <h3 style={H3}>6.2 Propriété de la plateforme</h3>
       <p style={P}>
         LearnI, son code source, son interface, ses algorithmes et son contenu généré sont la propriété
-        exclusive de David Nasial Basola. Toute reproduction, distribution ou utilisation commerciale sans
+        exclusive de LearnI. Toute reproduction, distribution ou utilisation commerciale sans
         autorisation écrite préalable est strictement interdite.
       </p>
       <h3 style={H3}>6.3 Contenu généré par l'IA</h3>
@@ -186,7 +186,7 @@ function Privacy() {
 
       <h2 style={H2}>1. Responsable du traitement des données</h2>
       <p style={P}>
-        David Nasial Basola — Ottawa, Ontario, Canada<br />
+        LearnI — Ottawa, Ontario, Canada<br />
         Courriel : <Mail />
       </p>
 
