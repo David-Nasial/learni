@@ -5,7 +5,7 @@ import { ChevronLeft, FileText, ShieldCheck } from 'lucide-react'
 
 type Tab = 'terms' | 'privacy'
 
-const CONTACT = 'davidbasola56@gmail.com'
+const CONTACT = 'contact@learni.ca'
 const LAST_UPDATE = '6 juillet 2026'
 
 // ─── Styles partagés ──────────────────────────────────────────────────────────
