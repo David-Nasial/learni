@@ -221,12 +221,15 @@ export function FlashcardsPage({ prefill, onConsumedPrefill }: {
         numCards,
         lang,
         activeSet.title,
-        cards  // cartes déjà vues → l'IA génère des cartes différentes
+        activeSet.cards as Flashcard[]  // TOUTES les cartes déjà générées → pas de doublons
       )
-      // On accumule les nouvelles cartes dans le set sauvegardé
-      const merged = [...cards, ...newCards]
+      // On accumule dans le jeu sauvegardé — en repartant des cartes RÉELLEMENT
+      // enregistrées, pas de celles affichées : sinon une deuxième régénération
+      // écrasait le jeu avec le seul dernier lot et effaçait les cartes d'avant.
+      const merged = [...(activeSet.cards as Flashcard[]), ...newCards]
       await updateFlashcardSet(activeSet.id, merged)
       setSets(prev => prev.map(s => s.id === activeSet.id ? { ...s, cards: merged } : s))
+      setActiveSet(s => s ? { ...s, cards: merged } : s)
       setCards(newCards)
       setIndex(0)
     } catch (err) {

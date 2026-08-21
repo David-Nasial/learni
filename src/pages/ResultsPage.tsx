@@ -1,5 +1,5 @@
 // ─── Page Résultats ───────────────────────────────────────────────────────────
-import type { QuizSession, Page, WrittenGrade } from '../types'
+import type { QuizSession, Page, WrittenGrade, Plan } from '../types'
 
 interface Props {
   session: QuizSession
@@ -8,11 +8,71 @@ interface Props {
   onNavigate: (page: Page) => void
   onRestart: () => void
   onUpgrade: () => void
+  plan?: Plan
+  isSuperadmin?: boolean
 }
 
-export function ResultsPage({ session, answers, writtenGrading, onNavigate, onRestart, onUpgrade }: Props) {
+export function ResultsPage({ session, answers, writtenGrading, onNavigate, onRestart, onUpgrade, plan, isSuperadmin }: Props) {
+  // Les explications détaillées font partie des plans payants — inutile (et vexant)
+  // de proposer d'y « passer » à quelqu'un qui les a déjà.
+  const hasPaidPlan = !!isSuperadmin || (!!plan && plan !== 'free')
+
   const isCorrect = (q: QuizSession['questions'][number], i: number) =>
     q.type === 'mcq' ? answers[i] === q.answerIndex : writtenGrading[i]?.isCorrect === true
+
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  // Export via la boîte d'impression du navigateur : « Enregistrer en PDF » y est
+  // disponible sur tous les systèmes, sans embarquer de librairie PDF.
+  const handleExport = () => {
+    if (!hasPaidPlan) { onUpgrade(); return }
+
+    const rows = session.questions.map((q, i) => {
+      const ok = isCorrect(q, i)
+      const given = q.type === 'mcq'
+        ? (typeof answers[i] === 'number' ? q.choices[answers[i] as number] : 'Sans réponse')
+        : (String(answers[i] ?? '').trim() || 'Sans réponse')
+      const expected = q.type === 'mcq' ? q.choices[q.answerIndex] : (q.modelAnswer ?? '')
+      return `
+        <div class="q">
+          <p class="qt">${i + 1}. ${escapeHtml(q.question)}</p>
+          <p class="${ok ? 'ok' : 'ko'}">${ok ? '✓ Bonne réponse' : '✗ Réponse incorrecte'}</p>
+          <p><strong>Ta réponse :</strong> ${escapeHtml(given)}</p>
+          ${!ok && expected ? `<p><strong>Réponse attendue :</strong> ${escapeHtml(expected)}</p>` : ''}
+          ${q.explanation ? `<p class="exp">${escapeHtml(q.explanation)}</p>` : ''}
+        </div>`
+    }).join('')
+
+    const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+      <title>${escapeHtml(session.title)} — Résultats LearnI</title>
+      <style>
+        body { font-family: system-ui, -apple-system, sans-serif; color: #111; max-width: 720px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; }
+        h1 { font-size: 1.4rem; margin-bottom: .2rem; }
+        .meta { color: #666; font-size: .85rem; margin-bottom: 1.5rem; }
+        .score { font-size: 1.1rem; font-weight: 700; margin-bottom: 2rem; }
+        .q { border-top: 1px solid #ddd; padding: 1rem 0; page-break-inside: avoid; }
+        .qt { font-weight: 600; margin-bottom: .4rem; }
+        .ok { color: #157a3f; font-weight: 600; }
+        .ko { color: #b3261e; font-weight: 600; }
+        .exp { color: #555; font-size: .9rem; font-style: italic; }
+        p { margin: .25rem 0; }
+        footer { margin-top: 2.5rem; color: #888; font-size: .8rem; }
+      </style></head><body>
+      <h1>${escapeHtml(session.title)}</h1>
+      <p class="meta">Quiz réalisé le ${new Date().toLocaleDateString('fr-CA')} · LearnI</p>
+      <p class="score">Score : ${correct} / ${total} (${pct} %)</p>
+      ${rows}
+      <footer>Généré par LearnI</footer>
+      </body></html>`
+
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    win.print()
+  }
 
   const correct = session.questions.filter((q, i) => isCorrect(q, i)).length
   const total = session.questions.length
@@ -93,20 +153,22 @@ export function ResultsPage({ session, answers, writtenGrading, onNavigate, onRe
               </div>
             )
           })}
-          <div style={{
-            marginTop: '.5rem', padding: '10px 12px',
-            background: '#1a1033', borderRadius: 8,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          }}>
-            <span style={{ fontSize: 12, color: '#a78bfa' }}>🤖 Obtenir des explications IA détaillées</span>
-            <button onClick={onUpgrade} style={{
-              padding: '5px 12px', background: 'var(--purple)', border: 'none',
-              borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600,
-              fontFamily: 'var(--font-body)',
+          {!hasPaidPlan && (
+            <div style={{
+              marginTop: '.5rem', padding: '10px 12px',
+              background: '#1a1033', borderRadius: 8,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              Pro →
-            </button>
-          </div>
+              <span style={{ fontSize: 12, color: '#a78bfa' }}>🤖 Obtenir des explications IA détaillées</span>
+              <button onClick={onUpgrade} style={{
+                padding: '5px 12px', background: 'var(--purple)', border: 'none',
+                borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600,
+                fontFamily: 'var(--font-body)',
+              }}>
+                Pro →
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -122,11 +184,17 @@ export function ResultsPage({ session, answers, writtenGrading, onNavigate, onRe
           border: '1px solid var(--border)', borderRadius: 10,
           color: 'var(--text)', fontSize: 14, fontFamily: 'var(--font-body)',
         }}>📄 Nouveau quiz</button>
-        <button onClick={() => onUpgrade()} style={{
-          padding: '12px 24px', background: 'var(--bg2)',
-          border: '1px solid var(--border)', borderRadius: 10,
-          color: 'var(--purple-l)', fontSize: 14, fontFamily: 'var(--font-body)',
-        }}>📤 Exporter PDF</button>
+        <button
+          onClick={handleExport}
+          title={hasPaidPlan ? 'Ouvre la boîte d\'impression — choisis « Enregistrer en PDF »' : undefined}
+          style={{
+            padding: '12px 24px', background: 'var(--bg2)',
+            border: '1px solid var(--border)', borderRadius: 10,
+            color: 'var(--purple-l)', fontSize: 14, fontFamily: 'var(--font-body)',
+          }}
+        >
+          📤 Exporter PDF
+        </button>
       </div>
     </div>
   )

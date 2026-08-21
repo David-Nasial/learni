@@ -27,7 +27,7 @@ import { useLocalStorage }    from './hooks/useLocalStorage'
 import { FeedbackModal }       from './components/FeedbackModal'
 import { FeedbackInboxPage }   from './pages/FeedbackInboxPage'
 import { LegalPage }           from './pages/LegalPage'
-import { signOut, saveResultToCloud, setAutodidacteProOverride, setSuperadminTestPlan, updateProfile, type FlashcardSet } from './utils/supabase'
+import { signOut, saveResultToCloud, getResultsFromCloud, setAutodidacteProOverride, setSuperadminTestPlan, updateProfile, type FlashcardSet } from './utils/supabase'
 import type {
   Page, Plan, AppMode, QuizResult, QuizSession,
   GenerateOptions, Question, WrittenGrade,
@@ -133,6 +133,28 @@ function AppInner() {
   useEffect(() => {
     if (profile?.plan) setPlan(profile.plan as Plan)
   }, [profile])
+
+  // Recharger l'historique depuis le cloud à la connexion.
+  // Les résultats y étaient bien sauvegardés mais n'étaient jamais relus : sur un
+  // autre appareil (ou après vidage du navigateur), l'élève voyait un historique
+  // vide alors que l'« historique complet cloud » lui est facturé.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    getResultsFromCloud(user.id)
+      .then(cloud => {
+        if (cancelled || cloud.length === 0) return
+        setResults(prev => {
+          const sig = (r: QuizResult) => `${r.title}|${r.date}|${r.score}|${r.total}|${r.durationSeconds}`
+          const known = new Set(cloud.map(sig))
+          // On garde les résultats locaux jamais montés en ligne (échec d'envoi hors ligne).
+          return [...cloud, ...prev.filter(r => !known.has(sig(r)))]
+        })
+      })
+      .catch(() => { /* hors ligne : l'historique local reste affiché */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
   // Déclencher onboarding première connexion
   useEffect(() => {
@@ -352,7 +374,7 @@ function AppInner() {
 
       case 'results':
         return session
-          ? <ResultsPage session={session} answers={finalAnswers} writtenGrading={writtenGrading} onNavigate={navigate} onRestart={handleRestart} onUpgrade={() => showPaywall('sub')} />
+          ? <ResultsPage session={session} answers={finalAnswers} writtenGrading={writtenGrading} onNavigate={navigate} onRestart={handleRestart} onUpgrade={() => showPaywall('sub')} plan={plan} isSuperadmin={isSuperadmin} />
           : null
 
       case 'history':

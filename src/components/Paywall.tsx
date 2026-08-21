@@ -20,7 +20,7 @@ const configs: Record<string, PaywallConfig> = {
       '🤖 Explications IA après chaque erreur',
       '📤 Export de quiz en PDF',
       '📊 Statistiques et graphiques avancés',
-      '🔄 Quiz illimités (gratuit : 3/jour)',
+      '🔄 Quiz illimités (gratuit : 2/jour)',
       '⚡ Génération prioritaire',
     ],
   },
@@ -46,7 +46,7 @@ const configs: Record<string, PaywallConfig> = {
   },
   limit: {
     icon: '⏳', title: 'Limite atteinte',
-    desc: 'Vous avez utilisé vos 3 quiz gratuits aujourd\'hui. Passez à Pro pour des quiz illimités.',
+    desc: 'Vous avez atteint votre limite de quiz pour aujourd\'hui. Passez à un plan supérieur pour continuer.',
     features: ['Quiz illimités chaque jour', 'Toutes les fonctions Pro', 'Annulez à tout moment'],
   },
 }
