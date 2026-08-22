@@ -79,7 +79,13 @@ export function HomeworkPage() {
   const handleDeleteSession = async (s: HomeworkSession, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm('Supprimer cette conversation ?')) return
-    await deleteHomeworkSession(s.id)
+    try {
+      await deleteHomeworkSession(s.id)
+    } catch {
+      // Sans message, le bouton semblait simplement ne rien faire.
+      setError('Impossible de supprimer cette conversation. Réessaie.')
+      return
+    }
     setSessions(prev => prev.filter(x => x.id !== s.id))
     if (activeSession?.id === s.id) { setActiveSession(null); setMessages([]) }
   }

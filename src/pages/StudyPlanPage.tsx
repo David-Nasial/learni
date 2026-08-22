@@ -363,9 +363,15 @@ function PlanTab({ userId, events, isStudent }: PlanTabProps) {
 
   const loadPlan = async () => {
     setLoading(true)
-    const result = await getStudyPlan(userId)
-    if (result) { setPlan(result.plan); setItems(result.items) }
-    setLoading(false)
+    try {
+      const result = await getStudyPlan(userId)
+      if (result) { setPlan(result.plan); setItems(result.items) }
+    } catch {
+      // Sans ce filet, une erreur réseau laissait la page bloquée sur le chargement.
+      setError('Impossible de charger ton plan d\'étude. Vérifie ta connexion et recharge la page.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleGenerate = async () => {

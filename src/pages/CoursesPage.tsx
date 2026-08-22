@@ -225,7 +225,12 @@ export function CoursesPage() {
 
   useEffect(() => {
     if (!user || !hasAccess) { setLoading(false); return }
-    getUserCourses(user.id).then(c => { setCourses(c); setLoading(false) })
+    getUserCourses(user.id)
+      .then(setCourses)
+      // Sans `catch`, `setLoading(false)` restait dans le `then` : la moindre
+      // erreur réseau laissait la page bloquée sur le chargement, indéfiniment.
+      .catch(() => setError('Impossible de charger tes cours. Vérifie ta connexion et recharge la page.'))
+      .finally(() => setLoading(false))
   }, [user])
 
   // Calcul progression d'un cours
@@ -745,6 +750,12 @@ export function CoursesPage() {
           + Nouveau cours
         </button>
       </div>
+
+      {error && (
+        <div style={{ padding: '12px 16px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 10, color: '#f87171', fontSize: 13, marginBottom: '1.25rem', lineHeight: 1.6 }}>
+          {error}
+        </div>
+      )}
 
       {courses.length === 0 ? (
         <div style={{

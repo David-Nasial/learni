@@ -214,12 +214,16 @@ function AppInner() {
     const limit = plan === 'free' ? 2 : plan === 'starter' ? 5 : Infinity
     if (!isSuperadmin && count >= limit) { setPaywall('limit'); return }
     setGenerateOpts(opts)
-    if (quizCountDate !== today) { setCountDate(today); setCount(1) }
-    else setCount(count + 1)
     navigate('generating')
   }
 
   const handleQuestionsReady = (questions: Question[]) => {
+    // Le quiz n'est décompté qu'une fois les questions réellement reçues : une
+    // génération qui échoue ne doit pas consommer un des quiz du jour.
+    const count = quizCountDate === today ? quizCountToday : 0
+    if (quizCountDate !== today) { setCountDate(today); setCount(1) }
+    else setCount(count + 1)
+
     setSession({
       id: `s-${Date.now()}`,
       title: generateOpts?.documentTitle ?? 'Quiz',
@@ -394,9 +398,10 @@ function AppInner() {
           : <LoginPage onSuccess={() => navigate('teacher')} initialMode="login" appMode={appMode} onShowLegal={() => navigate('legal')} />
 
       case 'student':
-        if (appMode !== 'school') { navigate('home'); return null }
+        // Accessible aussi en mode personnel : c'est la page « Mon profil »
+        // (nom, statistiques, historique) — le bouton du menu n'y menait nulle part.
         return user
-          ? <StudentDashboard />
+          ? <StudentDashboard appMode={appMode ?? 'personal'} />
           : <LoginPage onSuccess={() => navigate('student')} initialMode="login" appMode={appMode} onShowLegal={() => navigate('legal')} />
 
       case 'tutor':

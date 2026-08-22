@@ -117,7 +117,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
     },
     {
       icon: Calendar, label: 'Plan d\'étude', desc: 'Mon calendrier de révision intelligent', page: 'study' as Page,
-      color: '#10b981', always: false, show: isPro || isSchool || isSuperadmin,
+      color: '#10b981', always: false, show: isPro || plan === 'teacher' || isSuperadmin,
     },
     {
       icon: GraduationCap, label: 'Mes Cours', desc: 'Cours générés par l\'IA sur mes sujets', page: 'courses' as Page,
@@ -129,7 +129,7 @@ function DashboardHome({ onNavigate, onUpgrade, profile, plan, appMode, onToggle
     },
     {
       icon: Layers, label: 'Flashcards', desc: 'Cartes recto/verso générées par l\'IA', page: 'flashcards' as Page,
-      color: '#a78bfa', always: false, show: isPro || isAutodidacte || isSuperadmin,
+      color: '#a78bfa', always: false, show: ['starter', 'pro', 'autodidacte', 'teacher'].includes(plan ?? '') || isSuperadmin,
     },
     {
       icon: School, label: 'Ma classe', desc: 'Tableau de bord enseignant', page: 'teacher' as Page,

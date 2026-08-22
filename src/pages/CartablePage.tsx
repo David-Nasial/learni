@@ -1316,6 +1316,8 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
       const uaWithDocs = { ...ua, documents: [] }
       setUAs(prev => [...prev, uaWithDocs])
       setActiveCahier(c => c ? { ...c, uas: [...(c.uas ?? []), uaWithDocs] } : c)
+      // La liste des cahiers affiche « X UA » — sans ça elle restait à l'ancien compte.
+      setCahiers(prev => prev.map(c => c.id === activeCahier.id ? { ...c, uas: [...(c.uas ?? []), uaWithDocs] } : c))
       setShowNewUA(false); setNewUALabel('')
     } catch { setError('Impossible de créer l\'UA.') }
     finally { setCreatingUA(false) }
@@ -1397,6 +1399,7 @@ export function CartablePage({ onGenerateFlashcards, onOpenFlashcardSet }: {
     await deleteUA(ua.id)
     setUAs(prev => prev.filter(u => u.id !== ua.id))
     setActiveCahier(c => c ? { ...c, uas: (c.uas ?? []).filter(u => u.id !== ua.id) } : c)
+    setCahiers(prev => prev.map(c => c.id === activeCahier?.id ? { ...c, uas: (c.uas ?? []).filter(u => u.id !== ua.id) } : c))
   }
 
   // Téléverser document dans l'UA active

@@ -5,7 +5,7 @@ import { getResultsFromCloud, joinClassroom, updateProfile } from '../utils/supa
 import { useAuth } from '../hooks/useAuth'
 import type { QuizResult } from '../types'
 
-export function StudentDashboard() {
+export function StudentDashboard({ appMode = 'school' }: { appMode?: 'personal' | 'school' } = {}) {
   const { user, profile, refreshProfile } = useAuth()
   const [results,    setResults]    = useState<QuizResult[]>([])
   const [classCode,  setClassCode]  = useState('')
@@ -19,10 +19,10 @@ export function StudentDashboard() {
   // Charger l'historique depuis Supabase (cloud)
   useEffect(() => {
     if (!user) return
-    getResultsFromCloud(user.id).then(r => {
-      setResults(r)
-      setLoading(false)
-    })
+    getResultsFromCloud(user.id)
+      .then(setResults)
+      .catch(() => { /* l'historique reste vide — la page reste utilisable */ })
+      .finally(() => setLoading(false))
   }, [user])
 
   useEffect(() => {
@@ -185,7 +185,8 @@ export function StudentDashboard() {
           )}
         </div>
 
-        {/* ── Rejoindre une classe ──────────────────────────────────────── */}
+        {/* ── Rejoindre une classe (mode scolaire uniquement) ──────────── */}
+        {appMode === 'school' && (
         <div>
           <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700, color: 'var(--white)', marginBottom: '1rem' }}>
             🏫 Rejoindre une classe
@@ -222,6 +223,7 @@ export function StudentDashboard() {
             {joinError && <p style={{ fontSize: 13, color: '#f87171',     marginTop: 8 }}>{joinError}</p>}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

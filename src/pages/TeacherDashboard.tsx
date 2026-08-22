@@ -16,15 +16,18 @@ export function TeacherDashboard() {
   const [creating,     setCreating]     = useState(false)
   const [copied,       setCopied]       = useState('')
   const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState('')
 
   // Charger les classes
   useEffect(() => {
     if (!user) return
-    getTeacherClassrooms(user.id).then(cls => {
-      setClassrooms(cls)
-      if (cls.length > 0) selectClass(cls[0])
-      setLoading(false)
-    })
+    getTeacherClassrooms(user.id)
+      .then(cls => {
+        setClassrooms(cls)
+        if (cls.length > 0) selectClass(cls[0])
+      })
+      .catch(() => setError('Impossible de charger tes classes. Vérifie ta connexion et recharge la page.'))
+      .finally(() => setLoading(false))
   }, [user])
 
   const selectClass = async (cls: Classroom) => {
@@ -36,6 +39,7 @@ export function TeacherDashboard() {
   const handleCreate = async () => {
     if (!user || !newClassName.trim()) return
     setCreating(true)
+    setError('')
     try {
       const cls = await createClassroom(user.id, newClassName.trim())
       const updated = [cls, ...classrooms]
@@ -43,6 +47,9 @@ export function TeacherDashboard() {
       setSelected(cls)
       setResults([])
       setNewClassName('')
+    } catch (err) {
+      // Sans message, le bouton semblait simplement ne rien faire.
+      setError(err instanceof Error ? err.message : 'Impossible de créer la classe.')
     } finally {
       setCreating(false)
     }
@@ -69,6 +76,12 @@ export function TeacherDashboard() {
       <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 700, color: 'var(--white)', marginBottom: '1.75rem' }}>
         👩‍🏫 Tableau de bord — Enseignant
       </h2>
+
+      {error && (
+        <div style={{ padding: '12px 16px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 10, color: '#f87171', fontSize: 13, marginBottom: '1.25rem', lineHeight: 1.6 }}>
+          {error}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
 

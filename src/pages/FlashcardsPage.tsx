@@ -117,7 +117,9 @@ export function FlashcardsPage({ prefill, onConsumedPrefill }: {
     if (!user) { setLoadingSets(false); return }
     getFlashcardSets(user.id)
       .then(setSets)
-      .catch(() => {})
+      // Sans message, une erreur de chargement affichait une bibliothèque VIDE :
+      // l'élève croyait ses jeux perdus et les régénérait (appel IA facturé).
+      .catch(() => setError('Impossible de charger ta bibliothèque. Vérifie ta connexion et recharge la page — tes jeux ne sont pas perdus.'))
       .finally(() => setLoadingSets(false))
   }, [user])
 
@@ -399,6 +401,12 @@ export function FlashcardsPage({ prefill, onConsumedPrefill }: {
             <Plus size={16} /> Nouveau jeu
           </button>
         </div>
+
+        {error && (
+          <div style={{ padding: '12px 16px', background: '#2a0f0f', border: '1px solid var(--red)', borderRadius: 10, color: '#f87171', fontSize: 13, marginBottom: '1.25rem', lineHeight: 1.6 }}>
+            {error}
+          </div>
+        )}
 
         {loadingSets ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--muted)' }}>

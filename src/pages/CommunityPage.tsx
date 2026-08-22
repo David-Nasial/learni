@@ -24,9 +24,12 @@ export function CommunityPage({ appMode }: Props) {
   const isSuperadmin = profile?.role === 'superadmin'
   const isTeacher    = profile?.role === 'teacher'
 
+  // Aligné sur la grille tarifaire (Communautés = Autodidacte, ou classe en mode
+  // scolaire) : la page acceptait aussi Pro et Enseignant, que la page Tarifs
+  // et la barre latérale excluent.
   const hasAccess = isSuperadmin
     || appMode === 'school'
-    || ['autodidacte', 'pro', 'teacher'].includes(profile?.plan ?? '')
+    || profile?.plan === 'autodidacte'
 
   const [communities,  setCommunities]  = useState<Community[]>([])
   const [activeCom,    setActiveCom]    = useState<Community | null>(null)
